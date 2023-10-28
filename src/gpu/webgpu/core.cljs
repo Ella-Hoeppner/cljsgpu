@@ -83,14 +83,16 @@
                     data-offset
                     (or size js/undefined)))
 
-(defn create-buffer [device size usage & [{:keys [data] :as options}]]
+(defn create-buffer [device usage & [{:keys [size data] :as options}]]
   (let [buffer
         ^js (.createBuffer
              device
              (clj->js
               (merge
                (dissoc options :data)
-               {:size size
+               {:size (or size
+                          (when data
+                            (.-byteLength data)))
                 :usage (cond
                          (keyword? usage) (buffer-usage-map usage)
                          (set? usage) (reduce #(bit-or %1 (buffer-usage-map %2))

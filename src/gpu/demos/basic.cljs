@@ -34,24 +34,43 @@
      @builtin(position) pixelPosition : vec4f
    ) -> @location(0) vec4f {
      return vec4f(pixelPosition.xy/resolution, 0, 1);
-   }")
+   }"
+  #_'{:uniforms [[resolution vec2f]]
+      :functions
+      {vertex (vertex
+               [vertex-index {:type u32
+                              :builtin vertex-index}]
+               {:builtin position
+                :type vec4f}
+               (let pos
+                 (array (vec2f -1 -1)
+                        (vec2f 1 -1)
+                        (vec2f -1 1)
+                        (vec2f 1 1)
+                        (vec2f 1 -1)
+                        (vec2f -1 1)))
+               (vec4f [pos vertex-index] 0 1))
+       fragment (fragment
+                 [pixel-position {:type vec4f
+                                  :builtin position}]
+                 {:builtin position
+                  :type vec4f}
+                 (vec4f (/ pixel-position.xy resolution)
+                        0
+                        1))}})
 
 (defn start-sketch [device]
   (let [ctx (create-context-canvas device)]
-    (maximize-canvas ctx.canvas
-                     {:max-pixel-ratio 1})
+    (maximize-canvas ctx.canvas)
     (let [module (create-module device shader-code)
           pipeline (create-render-pipeline device {:module module})
           resolution-buffer (create-buffer device
-                                           8
                                            #{:uniform :copy-dst}
                                            {:data (js/Float32Array.
                                                    (ctx-resolution ctx))})
           bind-group (create-bind-group device
                                         (pipeline-layout pipeline)
                                         [resolution-buffer])]
-      (js/console.log (.createView
-                       ^js (.getCurrentTexture ctx)))
       (queue-device-render-pass device
                                 [(tex-view (current-ctx-texture ctx))]
                                 #(-> %
