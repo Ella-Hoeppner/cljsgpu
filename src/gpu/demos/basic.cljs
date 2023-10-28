@@ -1,11 +1,20 @@
 (ns gpu.demos.basic
   (:require [gpu.util :as u]
             [gpu.webgpu.core :refer [get-device
+                                     create-module
+                                     create-render-pipeline
                                      create-context-canvas
-                                     preferred-presentation-format]]
+                                     create-command-encode
+                                     create-buffer
+                                     write-buffer
+                                     create-bind-group
+                                     pipeline-layout
+                                     queue-render-pass
+                                     set-pass-pipeline
+                                     set-pass-bind-group]]
             [shadow.cljs.modern :refer [js-await]]
             [gpu.dom.canvas :refer [maximize-canvas
-                                    canvas-resolution]]))
+                                    ctx-resolution]]))
 
 (def shader-code
   "@group(0) @binding(0) var<uniform> resolution: vec2f;
@@ -32,51 +41,28 @@
   (let [ctx (create-context-canvas device)]
     (maximize-canvas ctx.canvas
                      {:max-pixel-ratio 1})
-    (let [module ^js (.createShaderModule device
-                                          (clj->js
-                                           {:code shader-code}))
-          pipeline
-          ^js (.createRenderPipeline
-               device
-               (clj->js
-                {:layout "auto"
-                 :vertex {:module module
-                          :entryPoint "vertex"}
-                 :fragment {:module module
-                            :entryPoint "fragment"
-                            :targets [{:format
-                                       (preferred-presentation-format)}]}}))
-          resolution-buffer
-          ^js (.createBuffer device
-                             (clj->js
-                              {:size 8
-                               :usage (bit-or js/GPUBufferUsage.UNIFORM
-                                              js/GPUBufferUsage.COPY_DST)}))]
-      ^js (.writeBuffer device.queue
-                        resolution-buffer
-                        0
-                        (js/Float32Array. (canvas-resolution ctx.canvas)))
-      (let [bind-group
-            ^js (.createBindGroup device
-                                  (clj->js
-                                   {:layout (.getBindGroupLayout pipeline 0)
-                                    :entries
-                                    [{:binding 0
-                                      :resource {:buffer resolution-buffer}}]}))
-            render-pass-descriptor (clj->js
-                                    {:colorAttachments
-                                     [{:clearValue [0.3 0.3 0.3 1]
-                                       :loadOp "clear"
-                                       :storeOp "store"}]})]
-        (set! (.-view (aget render-pass-descriptor.colorAttachments 0))
-              (.createView ^js (.getCurrentTexture ctx)))
-        (let [encoder ^js (.createCommandEncoder device)
-              pass (.beginRenderPass encoder render-pass-descriptor)]
-          (.setPipeline pass pipeline)
-          (.setBindGroup pass 0 bind-group)
-          (.draw pass 6)
-          (.end pass)
-          (.submit device.queue (clj->js [(.finish encoder)])))))))
+    (let [module (create-module device shader-code)
+          pipeline (create-render-pipeline device {:module module})
+          resolution-buffer (create-buffer device
+                                           8
+                                           #{:uniform :copy-dst}
+                                           {:data (js/Float32Array.
+                                                   (ctx-resolution ctx))})
+          bind-group (create-bind-group device
+                                        (pipeline-layout pipeline)
+                                        [resolution-buffer])
+          encoder (create-command-encode device)]
+      (queue-render-pass encoder
+                         device.queue
+                         {:colorAttachments
+                          [{:loadOp "clear"
+                            :storeOp "store"
+                            :view (.createView
+                                   ^js (.getCurrentTexture ctx))}]}
+                         6
+                         #(-> %
+                              (set-pass-pipeline pipeline)
+                              (set-pass-bind-group 0 bind-group))))))
 
 (defn init []
   (.then (get-device)

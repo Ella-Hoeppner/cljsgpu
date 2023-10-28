@@ -47,3 +47,6 @@
 
 (defn canvas-resolution [canvas]
   [canvas.width canvas.height])
+
+(defn ctx-resolution [ctx]
+  (canvas-resolution ctx.canvas))
