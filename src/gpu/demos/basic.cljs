@@ -14,31 +14,13 @@
                                      tex-view
                                      write-buffer]]
             [gpu.dom.canvas :refer [maximize-canvas
-                                    ctx-resolution]]))
+                                    ctx-resolution]]
+            [gpu.wort.core :refer [wort->wgsl]]))
 
 (def shader-code
-  "@group(0) @binding(0) var<uniform> resolution: vec2f;
-   @vertex fn vertex(
-     @builtin(vertex_index) vertexIndex : u32
-   ) -> @builtin(position) vec4f {
-     let pos = array(
-       vec2f( -1.0, -1.0),
-       vec2f( 1.0, -1.0),
-       vec2f( -1.0, 1.0),
-       vec2f( 1.0, 1.0),
-       vec2f( 1.0, -1.0),
-       vec2f( -1.0, 1.0)
-     );
-     return vec4f(pos[vertexIndex], 0.0, 1.0);
-   }
-   @fragment fn fragment(
-     @builtin(position) pixelPosition : vec4f
-   ) -> @location(0) vec4f {
-     let pos = pixelPosition.xy/resolution * 2 - 1;
-     let mag = distance(pos, vec2f(0));
-     return vec4f(select(vec3f(0), vec3f(1), mag < 0.5), 1);
-   }"
-  #_'{:uniforms [[resolution vec2f]]
+  (u/log
+   (wort->wgsl
+    '{:uniforms [[resolution vec2f]]
       :functions
       {vertex (vertex
                [vertex-index {:type u32
@@ -56,11 +38,14 @@
        fragment (fragment
                  [pixel-position {:type vec4f
                                   :builtin position}]
-                 {:builtin position
+                 {:location 0
                   :type vec4f}
-                 (vec4f (/ pixel-position.xy resolution)
-                        0
-                        1))}})
+                 (let pos (- (* 2 (/ pixel-position.xy resolution)) 1))
+                 (let mag (distance pos (vec2f 0)))
+                 (vec4f (select (vec3f 0)
+                                (vec3f 1)
+                                (< mag 0.5))
+                        1))}})))
 
 (defn sketch-loop [{:keys [ctx resolution-buffer device pipeline bind-group]
                     :as state}]

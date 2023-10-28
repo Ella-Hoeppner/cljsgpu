@@ -8,22 +8,32 @@
   (escape (str s)
           {"-" "_"}))
 
-(defn typed-name->wgsl [[name type]]
-  (str name " : " type))
-
 (def infix-operators
-  #{'+ '- '* '/ '%})
+  #{'+ '- '* '/ '% '< '<= '> '>= '==})
 
 (defn form->wgsl [form]
   (cond
-    (or (number? form)
-        (symbol? form))
-    (symbol->wgsl form)
+    (number? form) (str form)
+    (symbol? form) (symbol->wgsl form)
+
+    (vector? form)
+    (str (form->wgsl (first form))
+         "["
+         (form->wgsl (second form))
+         "]")
 
     :else (let [[f & args] form]
             (cond
               (and (= f '-) (= (count args) 1))
               (str "-" (form->wgsl (first args)))
+
+              (= f 'let)
+              (str "let "
+                   (symbol->wgsl (first args))
+                   (when (= (count args) 3)
+                     (str " : " (symbol->wgsl (second args)) " "))
+                   " = "
+                   (form->wgsl (last args)))
 
               (infix-operators f)
               (str "("
@@ -51,52 +61,63 @@
 (defn indent [block]
   (str "  " (string-replace block "\n" "\n  ")))
 
-(defn tag->wgsl [tag]
-  (str "@"
-       (symbol->wgsl (first tag))
-       (when (> (count tag) 1)
-         (str "("
-              (join ", " (map symbol->wgsl (rest tag)))
-              ")"))))
-
 (defn function->wgsl [name fn-spec]
-  (let [signature (first fn-spec)
-        tags (filter vector? (rest fn-spec))
-        body (filter (comp not vector?) fn-spec)
-        return-type-index (some #(when (symbol? (signature %))
-                                   %)
-                                (range (count signature)))]
-    (str (when (seq tags)
-           (str (apply str (join " " (map tag->wgsl tags)))
-                "\n"))
-         "fn "
-         (symbol->wgsl name)
-         "("
-         (apply str
-                (join ", "
-                      (map (fn [input]
-                             (if (= (count input) 2)
-                               (typed-name->wgsl input)
-                               (str (join " "
-                                          (map tag->wgsl (drop 2 input)))
-                                    " "
-                                    (typed-name->wgsl input))))
-                           (if return-type-index
-                             (take return-type-index signature)
-                             signature))))
-         ") "
-         (when return-type-index
-           (str "-> "
-                (let [tags (drop (inc return-type-index) signature)]
-                  (when (seq tags)
-                    (str (join " " (map tag->wgsl tags)) " ")))
-                (symbol->wgsl (signature return-type-index))
-                " "))
-         "{\n"
-         (indent (body->wgsl body (boolean return-type-index)))
-         "\n}")))
+  (let [arg-list-index (some #(when (vector? (nth fn-spec %)) %) (range))
+        tags (take arg-list-index fn-spec)
+        argument-list (nth fn-spec arg-list-index)
+        return (nth fn-spec (inc arg-list-index))
+        body (drop (+ 2 arg-list-index) fn-spec)]
+    (u/log [arg-list-index tags argument-list])
+    (str
+     (when (seq tags)
+       (str (apply str (join " " (map (partial str "@") tags)))
+            " "))
+     "fn "
+     (symbol->wgsl name)
+     (if (empty? argument-list)
+       "() "
+       (str "(\n"
+            (join
+             ",\n"
+             (map (fn [[argument-name argument-params]]
+                    (let [argument-type (if (map? argument-params)
+                                          (:type argument-params)
+                                          argument-params)]
+                      (indent
+                       (str (when (map? argument-params)
+                              (reduce #(str %1
+                                            "@"
+                                            (form->wgsl (symbol (first %2)))
+                                            "("
+                                            (form->wgsl (second %2))
+                                            ") ")
+                                      ""
+                                      (dissoc argument-params :type)))
+                            (symbol->wgsl argument-name)
+                            " : "
+                            argument-type))))
+                  (partition 2 argument-list)))
+            "\n) "))
+     (when return
+       (u/log return)
+       (str "-> "
+            (if (map? return)
+              (str (reduce #(str %1 
+                                 "@" 
+                                 (form->wgsl (symbol(first %2))) 
+                                 "("
+                                 (form->wgsl (second %2))
+                                 ") ")
+                           ""
+                           (dissoc return :type))
+                   (symbol->wgsl (:type return)))
+              return)
+            " "))
+     "{\n"
+     (indent (body->wgsl body (not (nil? return))))
+     "\n}")))
 
-(defn wort->wgsl [wort-shader]
+(defn functions->wgsl [functions]
   (apply str
          (apply concat
                 (butlast
@@ -104,28 +125,28 @@
                   (map (fn [[fn-name fn-spec]]
                          (str (function->wgsl fn-name fn-spec)
                               "\n"))
-                       (:functions wort-shader))
+                       functions)
                   (repeat "\n"))))))
 
-(comment
-  (print
-   (wort->wgsl
-    '{:functions
-      {negate ([[v vec3f] vec3f]
-               (- v))
-       vertex_entry_point ([[idx u32 [builtin vertex-index]]
-                            vec4f
-                            [builtin position]]
-                           [vertex]
-                           (vec4f (f32 (- (% idx 2) 1))
-                                  (f32 (- (/ idx 2) 1))
-                                  1
-                                  1))
-       fragment-main ([[pos vec4f [builtin position]]
-                       vec4f
-                       [location 0]]
-                      [fragment]
-                      (vec4 0 1 0 1))
-       another_compute_entry_point ([]
-                                    [compute]
-                                    [workgroup_size 16])}})))
+(defn uniforms->wgsl [uniforms]
+  (join "\n"
+        (mapcat (fn [uniform-group group-index]
+                  (map (fn [[uniform-name uniform-type] binding-index]
+                         (str "@group("
+                              group-index
+                              ") @binding("
+                              binding-index
+                              ") var<uniform> "
+                              (symbol->wgsl uniform-name)
+                              " : "
+                              (symbol->wgsl uniform-type)
+                              ";"))
+                       (partition 2 uniform-group)
+                       (range)))
+                uniforms
+                (range))))
+
+(defn wort->wgsl [shader]
+  (str (uniforms->wgsl (:uniforms shader))
+       "\n\n"
+       (functions->wgsl (:functions shader))))
