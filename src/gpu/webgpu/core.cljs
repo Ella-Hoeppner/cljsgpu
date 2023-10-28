@@ -103,7 +103,7 @@
       (write-buffer device buffer data))
     buffer))
 
-(defn create-command-encode [device & [label]]
+(defn create-command-encoder [device & [label]]
   ^js (.createCommandEncoder device (clj->js {:label label})))
 
 (defn create-bind-group [device layout resources & [label]]
@@ -125,16 +125,18 @@
 
 (defn device-default-encoder [device]
   (or device.defaultEncoder
-      (set! device.defaultEncoder (create-command-encode device))))
+      (set! device.defaultEncoder (create-command-encoder device))))
 
-(defn queue-render-pass [encoder queue color-attachements callback vertices
-                         & [options]]
-  (let [pass
+(defn queue-render-pass [device color-attachements callback vertices
+                         & [{:keys [queue]
+                             :as options}]]
+  (let [encoder (create-command-encoder device)
+        pass
         ^js (.beginRenderPass encoder
                               (clj->js
                                (assoc options
                                       :colorAttachments
-                                      (mapv #(-> (if (= (type %) 
+                                      (mapv #(-> (if (= (type %)
                                                         js/GPUTextureView)
                                                    {:view %}
                                                    %)
@@ -144,16 +146,7 @@
     (callback pass)
     (.draw pass vertices)
     (.end pass)
-    (.submit queue (clj->js [(.finish encoder)]))))
-
-(defn queue-device-render-pass [device color-attachements callback vertices 
-                                & [options]]
-  (queue-render-pass (device-default-encoder device)
-                     device.queue
-                     color-attachements
-                     callback
-                     vertices
-                     options))
+    (.submit (or queue device.queue) (clj->js [(.finish encoder)]))))
 
 (defn set-pass-pipeline [pass pipeline]
   ^js (.setPipeline pass pipeline)

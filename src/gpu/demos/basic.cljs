@@ -9,9 +9,10 @@
                                      pipeline-layout
                                      set-pass-pipeline
                                      set-pass-bind-group
-                                     queue-device-render-pass
+                                     queue-render-pass
                                      current-ctx-texture
-                                     tex-view]]
+                                     tex-view
+                                     write-buffer]]
             [gpu.dom.canvas :refer [maximize-canvas
                                     ctx-resolution]]))
 
@@ -33,7 +34,9 @@
    @fragment fn fragment(
      @builtin(position) pixelPosition : vec4f
    ) -> @location(0) vec4f {
-     return vec4f(pixelPosition.xy/resolution, 0, 1);
+     let pos = pixelPosition.xy/resolution * 2 - 1;
+     let mag = distance(pos, vec2f(0));
+     return vec4f(select(vec3f(0), vec3f(1), mag < 0.5), 1);
    }"
   #_'{:uniforms [[resolution vec2f]]
       :functions
@@ -59,25 +62,44 @@
                         0
                         1))}})
 
-(defn start-sketch [device]
-  (let [ctx (create-context-canvas device)]
-    (maximize-canvas ctx.canvas)
-    (let [module (create-module device shader-code)
-          pipeline (create-render-pipeline device {:module module})
-          resolution-buffer (create-buffer device
-                                           #{:uniform :copy-dst}
-                                           {:data (js/Float32Array.
-                                                   (ctx-resolution ctx))})
-          bind-group (create-bind-group device
-                                        (pipeline-layout pipeline)
-                                        [resolution-buffer])]
-      (queue-device-render-pass device
-                                [(tex-view (current-ctx-texture ctx))]
-                                #(-> %
-                                     (set-pass-pipeline pipeline)
-                                     (set-pass-bind-group 0 bind-group))
-                                6))))
+(defn sketch-loop [{:keys [ctx resolution-buffer device pipeline bind-group]
+                    :as state}]
+  (maximize-canvas ctx.canvas)
+  (write-buffer device
+                resolution-buffer
+                (js/Float32Array.
+                 (ctx-resolution ctx)))
+  (queue-render-pass device
+                     [(tex-view (current-ctx-texture ctx))]
+                     #(-> %
+                          (set-pass-pipeline pipeline)
+                          (set-pass-bind-group 0 bind-group))
+                     6)
+  (js/requestAnimationFrame (partial sketch-loop state)))
+
+(defn sketch-start [device]
+  (let [ctx (create-context-canvas device)
+        module (create-module device shader-code)
+        pipeline (create-render-pipeline device {:module module})
+        resolution-buffer (create-buffer device
+                                         #{:uniform :copy-dst}
+                                         {:size 8})
+        bind-group (create-bind-group device
+                                      (pipeline-layout pipeline)
+                                      [resolution-buffer])]
+    (queue-render-pass device
+                       [(tex-view (current-ctx-texture ctx))]
+                       #(-> %
+                            (set-pass-pipeline pipeline)
+                            (set-pass-bind-group 0 bind-group))
+                       6)
+    (sketch-loop {:ctx ctx
+                  :device device
+                  :module module
+                  :pipeline pipeline
+                  :resolution-buffer resolution-buffer
+                  :bind-group bind-group})))
 
 (defn init []
   (.then (get-device)
-         start-sketch))
+         sketch-start))
