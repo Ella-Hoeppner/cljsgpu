@@ -1,6 +1,9 @@
 (ns gpu.webgpu.core
   (:require [shadow.cljs.modern :refer [js-await]]))
 
+(defn default [m key default-value]
+  (update m key #(or % default-value)))
+
 (defn get-adapter []
   (when-not js/navigator.gpu
     (throw "CLJSGPU: this browser doesn't support WebGPU! :("))
@@ -46,28 +49,26 @@
 
 (defn create-render-pipeline [device & [{:keys [module]
                                          :as options}]]
-  (letfn [(default [m key default-value]
-            (update m key #(or % default-value)))]
-    ^js
-    (.createRenderPipeline
-     device
-     (clj->js
-      (-> options
-          (dissoc module)
-          (update :layout
-                  #(or % "auto"))
-          (update :fragment
-                  (fn [fragment]
-                    (-> fragment
-                        (default :entryPoint "fragment")
-                        (default :module module)
-                        (default :targets [{:format
-                                            (preferred-canvas-format)}]))))
-          (update :vertex
-                  (fn [vertex]
-                    (-> vertex
-                        (default :entryPoint "vertex")
-                        (default :module module)))))))))
+  ^js
+  (.createRenderPipeline
+   device
+   (clj->js
+    (-> options
+        (dissoc module)
+        (update :layout
+                #(or % "auto"))
+        (update :fragment
+                (fn [fragment]
+                  (-> fragment
+                      (default :entryPoint "fragment")
+                      (default :module module)
+                      (default :targets [{:format
+                                          (preferred-canvas-format)}]))))
+        (update :vertex
+                (fn [vertex]
+                  (-> vertex
+                      (default :entryPoint "vertex")
+                      (default :module module))))))))
 
 (def buffer-usage-map
   {:uniform js/GPUBufferUsage.UNIFORM
@@ -120,15 +121,37 @@
 (defn pipeline-layout [pipeline & [index]]
   ^js (.getBindGroupLayout pipeline (or index 0)))
 
-(defn queue-render-pass [encoder queue descriptor vertices callback]
-  (let [pass ^js (.beginRenderPass
-                  encoder
-                  (clj->js
-                   descriptor))]
+(defn device-default-encoder [device]
+  (or device.defaultEncoder
+      (set! device.defaultEncoder (create-command-encode device))))
+
+(defn queue-render-pass [encoder queue color-attachements callback vertices
+                         & [options]]
+  (let [pass
+        ^js (.beginRenderPass encoder
+                              (clj->js
+                               (assoc options
+                                      :colorAttachments
+                                      (mapv #(-> (if (= (type %) 
+                                                        js/GPUTextureView)
+                                                   {:view %}
+                                                   %)
+                                                 (default :loadOp :clear)
+                                                 (default :storeOp :store))
+                                            color-attachements))))]
     (callback pass)
     (.draw pass vertices)
     (.end pass)
     (.submit queue (clj->js [(.finish encoder)]))))
+
+(defn queue-device-render-pass [device color-attachements callback vertices 
+                                & [options]]
+  (queue-render-pass (device-default-encoder device)
+                     device.queue
+                     color-attachements
+                     callback
+                     vertices
+                     options))
 
 (defn set-pass-pipeline [pass pipeline]
   ^js (.setPipeline pass pipeline)
@@ -137,3 +160,9 @@
 (defn set-pass-bind-group [pass index bind-group]
   ^js (.setBindGroup pass index bind-group)
   pass)
+
+(defn current-ctx-texture [ctx]
+  ^js (.getCurrentTexture ctx))
+
+(defn tex-view [tex & [options]]
+  ^js (.createView tex (clj->js options)))

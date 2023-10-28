@@ -4,15 +4,14 @@
                                      create-module
                                      create-render-pipeline
                                      create-context-canvas
-                                     create-command-encode
                                      create-buffer
-                                     write-buffer
                                      create-bind-group
                                      pipeline-layout
-                                     queue-render-pass
                                      set-pass-pipeline
-                                     set-pass-bind-group]]
-            [shadow.cljs.modern :refer [js-await]]
+                                     set-pass-bind-group
+                                     queue-device-render-pass
+                                     current-ctx-texture
+                                     tex-view]]
             [gpu.dom.canvas :refer [maximize-canvas
                                     ctx-resolution]]))
 
@@ -50,19 +49,15 @@
                                                    (ctx-resolution ctx))})
           bind-group (create-bind-group device
                                         (pipeline-layout pipeline)
-                                        [resolution-buffer])
-          encoder (create-command-encode device)]
-      (queue-render-pass encoder
-                         device.queue
-                         {:colorAttachments
-                          [{:loadOp "clear"
-                            :storeOp "store"
-                            :view (.createView
-                                   ^js (.getCurrentTexture ctx))}]}
-                         6
-                         #(-> %
-                              (set-pass-pipeline pipeline)
-                              (set-pass-bind-group 0 bind-group))))))
+                                        [resolution-buffer])]
+      (js/console.log (.createView
+                       ^js (.getCurrentTexture ctx)))
+      (queue-device-render-pass device
+                                [(tex-view (current-ctx-texture ctx))]
+                                #(-> %
+                                     (set-pass-pipeline pipeline)
+                                     (set-pass-bind-group 0 bind-group))
+                                6))))
 
 (defn init []
   (.then (get-device)
