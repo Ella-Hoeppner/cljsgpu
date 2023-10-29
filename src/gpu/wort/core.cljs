@@ -4,16 +4,25 @@
              :refer [escape replace join]
              :rename {replace string-replace}]))
 
+(defn indent [block]
+  (str "  " (string-replace block "\n" "\n  ")))
+
 (defn symbol->wgsl [s]
   (escape (str s)
           {"-" "_"}))
 
+(def assignment-operators
+  '#{= "/=" *= -= +=})
+
 (def infix-operators
-  #{'+ '- '* '/ '% '< '<= '> '>= '==})
+  '#{+ - * / % < <= > >= == != >> << & "^" | && ||})
+
+(declare body->wgsl)
 
 (defn form->wgsl [form]
   (cond
     (number? form) (str form)
+    (boolean? form) (str form)
     (symbol? form) (symbol->wgsl form)
 
     (vector? form)
@@ -24,16 +33,74 @@
 
     :else (let [[f & args] form]
             (cond
+
               (and (= f '-) (= (count args) 1))
               (str "-" (form->wgsl (first args)))
 
-              (= f 'let)
-              (str "let "
+              ('#{++ --} f)
+              (str (first args) f)
+
+              ('#{let const var} f)
+              (str f
+                   " "
                    (symbol->wgsl (first args))
                    (when (= (count args) 3)
                      (str " : " (symbol->wgsl (second args)) " "))
                    " = "
                    (form->wgsl (last args)))
+
+              (= '? f)
+              (let [[condition true-case false-case] (map form->wgsl args)]
+                (u/log [condition true-case false-case])
+                (str "select("
+                     true-case
+                     ","
+                     false-case
+                     ","
+                     condition
+                     ")"))
+              
+              (= 'if f)
+              (let [[condition true-block false-block] args
+                    block-body (fn [block]
+                                 (indent (body->wgsl
+                                          (if (and (seq? block)
+                                                   (= (first block) :block))
+                                            (rest block)
+                                            (list block)))))]
+                (str "if "
+                     (form->wgsl condition)
+                     " {\n"
+                     (block-body true-block)
+                     "\n}"
+                     (when false-block
+                       (str "\nelse {\n"
+                            (block-body false-block)
+                            "\n}"))))
+              
+              (= 'when f)
+              (str "if "
+                   (form->wgsl (first args))
+                   " {\n"
+                   (indent (body->wgsl (rest args)))
+                   "\n}")
+
+              (= 'for f)
+              (let [[initializer condition continuing]
+                    (map form->wgsl (take 3 args))]
+                (str "for("
+                     initializer
+                     "; "
+                     condition
+                     "; "
+                     continuing
+                     ") {\n"
+                     (indent (body->wgsl (drop 3 args)))
+                     "\n}"))
+
+              (assignment-operators f)
+              (join (str " " f " ") (map form->wgsl
+                                         args))
 
               (infix-operators f)
               (str "("
@@ -47,19 +114,16 @@
                                (map form->wgsl args))
                          ")")))))
 
-(defn body->wgsl [body returns?]
+(defn body->wgsl [body & [returns?]]
   (if (empty? body)
     ""
     (let [forms (map form->wgsl body)]
-      (str (join ";\n"
-                 (if returns?
-                   (concat (butlast forms)
-                           (list (str "return " (last forms))))
-                   forms))
-           ";"))))
-
-(defn indent [block]
-  (str "  " (string-replace block "\n" "\n  ")))
+      (str (join "\n"
+                 (map #(str % (when-not (= (last %) "}") ";"))
+                      (if returns?
+                        (concat (butlast forms)
+                                (list (str "return " (last forms))))
+                        forms)))))))
 
 (defn function->wgsl [name fn-spec]
   (let [arg-list-index (some #(when (vector? (nth fn-spec %)) %) (range))
@@ -67,7 +131,6 @@
         argument-list (nth fn-spec arg-list-index)
         return (nth fn-spec (inc arg-list-index))
         body (drop (+ 2 arg-list-index) fn-spec)]
-    (u/log [arg-list-index tags argument-list])
     (str
      (when (seq tags)
        (str (apply str (join " " (map (partial str "@") tags)))
@@ -99,7 +162,6 @@
                   (partition 2 argument-list)))
             "\n) "))
      (when return
-       (u/log return)
        (str "-> "
             (if (map? return)
               (str (reduce #(str %1 
