@@ -20,7 +20,8 @@
 (def shader-code
   (u/log
    (wort->wgsl
-    '{:uniforms [[resolution vec2f]]
+    '{:uniforms [[resolution vec2f
+                  time f32]]
       :functions
       {vertex (vertex
                [vertex-index {:type u32
@@ -38,7 +39,9 @@
        sdf ([pos vec3f]
             f32
             (- (distance (+ pos
-                            (vec3f 0 0 (* 1 (sin (* 5 pos.x)))))
+                            (vec3f (* 0.65 (sin (* 1 (+ time pos.y))))
+                                   (* 0.1 (sin (* 7 (+ time pos.z))))
+                                   (* 0.4 (sin (* 3 (+ time pos.x))))))
                          (vec3f 0))
                4))
        fragment
@@ -57,12 +60,12 @@
         (var ray-pos (vec3f 0 0 -10))
         (let ray-dir (normalize (vec3 pos 1)))
         (var hit-surface false)
-        (for (var i 0) (< i 100) (++ i)
+        (for (var i 0) (< i 64) (++ i)
              (let dist (sdf ray-pos))
-             (if (< dist 0.0025)
+             (if (< (abs dist) 0.01)
                (:block (= hit-surface true)
                        break)
-               (+= ray-pos (* 0.75 dist ray-dir))))
+               (+= ray-pos (* 0.95 dist ray-dir))))
         (when hit-surface
           (return
            (vec4f
@@ -84,13 +87,21 @@
             1)))
         (vec4f 0 0 0 1))}})))
 
-(defn sketch-loop [{:keys [ctx resolution-buffer device pipeline bind-group]
+(defn sketch-loop [{:keys [ctx 
+                           resolution-buffer
+                           time-buffer 
+                           device
+                           pipeline
+                           bind-group]
                     :as state}]
   (maximize-canvas ctx.canvas)
   (write-buffer device
                 resolution-buffer
                 (js/Float32Array.
                  (ctx-resolution ctx)))
+  (write-buffer device 
+                time-buffer
+                (js/Float32Array. [(u/seconds-since-startup)]))
   (queue-render-pass device
                      [(tex-view (current-ctx-texture ctx))]
                      #(-> %
@@ -106,9 +117,13 @@
         resolution-buffer (create-buffer device
                                          #{:uniform :copy-dst}
                                          {:size 8})
+        time-buffer (create-buffer device
+                                   #{:uniform :copy-dst}
+                                   {:size 4})
         bind-group (create-bind-group device
                                       (pipeline-layout pipeline)
-                                      [resolution-buffer])]
+                                      [resolution-buffer
+                                       time-buffer])]
     (queue-render-pass device
                        [(tex-view (current-ctx-texture ctx))]
                        #(-> %
@@ -120,6 +135,7 @@
                   :module module
                   :pipeline pipeline
                   :resolution-buffer resolution-buffer
+                  :time-buffer time-buffer
                   :bind-group bind-group})))
 
 (defn init []
