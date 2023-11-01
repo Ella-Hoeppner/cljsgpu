@@ -191,24 +191,41 @@
                   (repeat "\n"))))))
 
 (defn uniforms->wgsl [uniforms]
+  (str (join "\n"
+             (mapcat (fn [uniform-group group-index]
+                       (map (fn [[uniform-name uniform-type] binding-index]
+                              (str "@group("
+                                   group-index
+                                   ") @binding("
+                                   binding-index
+                                   ") var<uniform> "
+                                   (symbol->wgsl uniform-name)
+                                   " : "
+                                   (symbol->wgsl uniform-type)
+                                   ";"))
+                            (partition 2 uniform-group)
+                            (range)))
+                     uniforms
+                     (range)))
+       "\n"))
+
+(defn structs->wgsl [structs]
   (join "\n"
-        (mapcat (fn [uniform-group group-index]
-                  (map (fn [[uniform-name uniform-type] binding-index]
-                         (str "@group("
-                              group-index
-                              ") @binding("
-                              binding-index
-                              ") var<uniform> "
-                              (symbol->wgsl uniform-name)
-                              " : "
-                              (symbol->wgsl uniform-type)
-                              ";"))
-                       (partition 2 uniform-group)
-                       (range)))
-                uniforms
-                (range))))
+        (map (fn [[struct-name struct-fields]]
+               (u/log struct-name struct-fields)
+               (str "struct " (symbol->wgsl struct-name) " {\n"
+                    (indent (join ",\n"
+                                  (map (fn [[field-name field-type]]
+                                         (str (symbol->wgsl field-name)
+                                              ": "
+                                              field-type))
+                                       (partition 2 struct-fields))))
+                    "\n}\n"))
+             structs)))
 
 (defn wort->wgsl [shader]
   (str (uniforms->wgsl (:uniforms shader))
-       "\n\n"
+       "\n"
+       (structs->wgsl (:structs shader))
+       "\n"
        (functions->wgsl (:functions shader))))
