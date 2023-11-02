@@ -47,46 +47,52 @@
                            (clj->js
                             (assoc options :code code))))
 
-(defn create-render-pipeline [device & [{:keys [module]
+(defn create-render-pipeline [device & [{:keys [module wgsl]
                                          :as options}]]
   ^js
   (.createRenderPipeline
    device
    (clj->js
-    (-> options
-        (dissoc module)
-        (update :layout
-                #(or % "auto"))
-        (update :fragment
-                (fn [fragment]
-                  (-> fragment
-                      (default :entryPoint "fragment")
-                      (default :module module)
-                      (default :targets [{:format
-                                          (preferred-canvas-format)}]))))
-        (update :vertex
-                (fn [vertex]
-                  (-> vertex
-                      (default :entryPoint "vertex")
-                      (default :module module))))))))
+    (let [default-module (or module
+                             (when wgsl
+                               (create-module device wgsl)))]
+      (-> options
+          (dissoc :module :wgsl)
+          (update :layout
+                  #(or % "auto"))
+          (update :fragment
+                  (fn [fragment]
+                    (-> fragment
+                        (default :entryPoint "fragment")
+                        (default :module default-module)
+                        (default :targets [{:format
+                                            (preferred-canvas-format)}]))))
+          (update :vertex
+                  (fn [vertex]
+                    (-> vertex
+                        (default :entryPoint "vertex")
+                        (default :module default-module)))))))))
 
-(defn create-compute-pipeline [device & [{:keys [module]
+(defn create-compute-pipeline [device & [{:keys [module wgsl]
                                           :as options}]]
   ^js
   (.createComputePipeline
    device
    (clj->js
-    (-> options
-        (dissoc module)
-        (update :layout
-                #(or % "auto"))
-        (update :compute
-                (fn [compute]
-                  (-> compute
-                      (default :entryPoint "compute")
-                      (default :module module)
-                      (default :targets [{:format
-                                          (preferred-canvas-format)}]))))))))
+    (let [default-module (or module
+                             (when wgsl
+                               (create-module device wgsl)))]
+      (-> options
+          (dissoc :module :wgsl)
+          (update :layout
+                  #(or % "auto"))
+          (update :compute
+                  (fn [compute]
+                    (-> compute
+                        (default :entryPoint "compute")
+                        (default :module default-module)
+                        (default :targets [{:format
+                                            (preferred-canvas-format)}])))))))))
 
 (def buffer-usage-map
   {:uniform js/GPUBufferUsage.UNIFORM

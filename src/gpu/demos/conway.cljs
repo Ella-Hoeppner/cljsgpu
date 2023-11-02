@@ -140,12 +140,10 @@
 
 (defn sketch-start [device]
   (let [ctx (create-context-canvas device)
-        render-module (create-module device render-shader-wgsl)
-        compute-module (create-module device compute-shader-wgsl)
         render-pipeline (create-render-pipeline device
-                                                {:module render-module})
+                                                {:wgsl render-shader-wgsl})
         compute-pipeline (create-compute-pipeline device
-                                                  {:module compute-module})
+                                                  {:wgsl compute-shader-wgsl})
         resolution-buffer (create-buffer device
                                          #{:uniform :copy-dst}
                                          {:size 8})
@@ -157,7 +155,8 @@
                                              {:size initial-cells.byteLength}))
 
         render-bind-groups (map #(create-bind-group device
-                                                    (pipeline-layout render-pipeline)
+                                                    (pipeline-layout
+                                                     render-pipeline)
                                                     [resolution-buffer
                                                      %])
                                 grid-buffers)
