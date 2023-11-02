@@ -9,7 +9,9 @@
                                      pipeline-layout
                                      set-pass-pipeline
                                      set-pass-bind-group
-                                     queue-render-pass
+                                     render-pass
+                                     create-command-encoder
+                                     finish-command-encoder
                                      current-ctx-texture
                                      tex-view
                                      write-buffer]]
@@ -104,12 +106,14 @@
   (write-buffer device
                 time-buffer
                 (js/Float32Array. [(u/seconds-since-startup)]))
-  (queue-render-pass device
-                     [(tex-view (current-ctx-texture ctx))]
-                     #(-> %
-                          (set-pass-pipeline pipeline)
-                          (set-pass-bind-group 0 bind-group))
-                     6)
+  (let [encoder (create-command-encoder device)]
+    (render-pass encoder
+                 [(tex-view (current-ctx-texture ctx))]
+                 #(-> %
+                      (set-pass-pipeline pipeline)
+                      (set-pass-bind-group 0 bind-group))
+                 6)
+    (finish-command-encoder encoder device))
   (js/requestAnimationFrame (partial sketch-loop state)))
 
 (defn sketch-start [device]

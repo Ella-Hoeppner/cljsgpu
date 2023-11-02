@@ -135,12 +135,10 @@
   (or device.defaultEncoder
       (set! device.defaultEncoder (create-command-encoder device))))
 
-(defn queue-render-pass [device color-attachements callback vertices
-                         & [{:keys [queue]
-                             :as options}]]
-  (let [encoder (create-command-encoder device)
-        pass
-        ^js (.beginRenderPass encoder
+(defn render-pass [command-encoder color-attachements callback vertices
+                   & [options]]
+  (let [pass
+        ^js (.beginRenderPass command-encoder
                               (clj->js
                                (assoc options
                                       :colorAttachments
@@ -153,8 +151,16 @@
                                             color-attachements))))]
     (callback pass)
     (.draw pass vertices)
-    (.end pass)
-    (.submit (or queue device.queue) (clj->js [(.finish encoder)]))))
+    (.end pass)))
+
+(defn finish-command-encoder [encoder & [queue-or-device]]
+  (let [completion (.finish encoder)]
+    (if queue-or-device
+      (let [queue (if (= (type queue-or-device) js/GPUDevice)
+                    queue-or-device.queue
+                    queue-or-device)]
+        (.submit queue (clj->js [completion])))
+      completion)))
 
 (defn set-pass-pipeline [pass pipeline]
   ^js (.setPipeline pass pipeline)
