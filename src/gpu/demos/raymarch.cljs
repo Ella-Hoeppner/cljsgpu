@@ -1,6 +1,7 @@
 (ns gpu.demos.raymarch
   (:require [gpu.util :as u]
             [gpu.webgpu.core :refer [get-device
+                                     start-sketch!
                                      create-render-pipeline
                                      create-context-canvas
                                      create-buffer
@@ -11,11 +12,11 @@
                                      render-pass
                                      create-command-encoder
                                      finish-command-encoder
-                                     current-ctx-texture
+                                     current-context-texture
                                      tex-view
                                      write-buffer]]
             [gpu.dom.canvas :refer [maximize-canvas
-                                    ctx-resolution]]
+                                    context-resolution]]
             [gpu.wort.core :refer [wort->wgsl]]))
 
 (def shader-code
@@ -89,33 +90,33 @@
            1)))
        (vec4f 0 0 0 1))}}))
 
-(defn sketch-loop [{:keys [ctx
-                           resolution-buffer
-                           time-buffer
-                           device
-                           pipeline
-                           bind-group]
-                    :as state}]
-  (maximize-canvas ctx.canvas)
+(defn update-sketch [device
+                     {:keys [context
+                             resolution-buffer
+                             time-buffer
+                             pipeline
+                             bind-group]
+                      :as state}]
+  (maximize-canvas context.canvas)
   (write-buffer device
                 resolution-buffer
                 (js/Float32Array.
-                 (ctx-resolution ctx)))
+                 (context-resolution context)))
   (write-buffer device
                 time-buffer
                 (js/Float32Array. [(u/seconds-since-startup)]))
   (let [encoder (create-command-encoder device)]
     (render-pass encoder
-                 [(tex-view (current-ctx-texture ctx))]
+                 [(tex-view (current-context-texture context))]
                  #(-> %
                       (set-pass-pipeline pipeline)
                       (set-pass-bind-group 0 bind-group))
                  6)
     (finish-command-encoder encoder device))
-  (js/requestAnimationFrame (partial sketch-loop state)))
+  state)
 
-(defn sketch-start [device]
-  (let [ctx (create-context-canvas device)
+(defn init-sketch [device]
+  (let [context (create-context-canvas device)
         pipeline (create-render-pipeline device {:wgsl shader-code})
         resolution-buffer (create-buffer device
                                          #{:uniform :copy-dst}
@@ -127,13 +128,12 @@
                                       (pipeline-layout pipeline)
                                       [resolution-buffer
                                        time-buffer])]
-    (sketch-loop {:ctx ctx
-                  :device device
-                  :pipeline pipeline
-                  :resolution-buffer resolution-buffer
-                  :time-buffer time-buffer
-                  :bind-group bind-group})))
+    {:context context
+     :device device
+     :pipeline pipeline
+     :resolution-buffer resolution-buffer
+     :time-buffer time-buffer
+     :bind-group bind-group}))
 
 (defn init []
-  (.then (get-device)
-         sketch-start))
+  (start-sketch! init-sketch update-sketch))

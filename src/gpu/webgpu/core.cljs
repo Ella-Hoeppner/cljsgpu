@@ -203,8 +203,21 @@
   ^js (.setBindGroup pass index bind-group)
   pass)
 
-(defn current-ctx-texture [ctx]
-  ^js (.getCurrentTexture ctx))
+(defn current-context-texture [context]
+  ^js (.getCurrentTexture context))
 
 (defn tex-view [tex & [options]]
   ^js (.createView tex (clj->js options)))
+
+(defn start-sketch! [init-fn update-fn & [{:keys [device]}]]
+  (let [start-from-device (fn [device]
+                            (let [initial-state (init-fn device)]
+                              ((fn loop-fn [state]
+                                 (js/requestAnimationFrame
+                                  (partial loop-fn
+                                           (update-fn device
+                                                      state))))
+                               initial-state)))]
+    (if device
+      (start-from-device device)
+      (.then (get-device) start-from-device))))

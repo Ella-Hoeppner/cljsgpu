@@ -1,7 +1,6 @@
 (ns gpu.demos.conway
   (:require [gpu.util :as u]
-            [gpu.webgpu.core :refer [get-device
-                                     create-module
+            [gpu.webgpu.core :refer [start-sketch!
                                      create-render-pipeline
                                      create-compute-pipeline
                                      create-context-canvas
@@ -14,11 +13,11 @@
                                      compute-pass
                                      create-command-encoder
                                      finish-command-encoder
-                                     current-ctx-texture
+                                     current-context-texture
                                      tex-view
                                      write-buffer]]
             [gpu.dom.canvas :refer [maximize-canvas
-                                    ctx-resolution]]
+                                    context-resolution]]
             [gpu.wort.core :refer [wort->wgsl]]
             [gpu.wort.tools :refer-macros [unquotable]]))
 
@@ -103,20 +102,20 @@
                   1)
            (vec4f 0 0 0 1)))}})))
 
-(defn sketch-loop [{:keys [ctx
-                           resolution-buffer
-                           device
-                           render-pipeline
-                           render-bind-groups
-                           compute-pipeline
-                           compute-bind-groups]
-                    :as state}]
-  (maximize-canvas ctx.canvas)
+(defn update-sketch [device
+                     {:keys [context
+                             resolution-buffer
+                             render-pipeline
+                             render-bind-groups
+                             compute-pipeline
+                             compute-bind-groups]
+                      :as state}]
+  (maximize-canvas context.canvas)
 
   (write-buffer device
                 resolution-buffer
                 (js/Float32Array.
-                 (ctx-resolution ctx)))
+                 (context-resolution context)))
 
   (let [encoder (create-command-encoder device)]
     (compute-pass encoder
@@ -126,20 +125,18 @@
                   [(/ grid-size workgroup-size)
                    (/ grid-size workgroup-size)])
     (render-pass encoder
-                 [(tex-view (current-ctx-texture ctx))]
+                 [(tex-view (current-context-texture context))]
                  #(-> %
                       (set-pass-pipeline render-pipeline)
                       (set-pass-bind-group 0 (first render-bind-groups)))
                  6)
     (finish-command-encoder encoder device))
-  (js/requestAnimationFrame
-   (partial sketch-loop
-            (-> state
-                (update :compute-bind-groups reverse)
-                (update :render-bind-groups reverse)))))
+  (-> state
+      (update :compute-bind-groups reverse)
+      (update :render-bind-groups reverse)))
 
-(defn sketch-start [device]
-  (let [ctx (create-context-canvas device)
+(defn init-sketch [device]
+  (let [context (create-context-canvas device)
         render-pipeline (create-render-pipeline device
                                                 {:wgsl render-shader-wgsl})
         compute-pipeline (create-compute-pipeline device
@@ -168,14 +165,13 @@
     (write-buffer device
                   (first grid-buffers)
                   initial-cells)
-    (sketch-loop {:ctx ctx
-                  :device device
-                  :render-pipeline render-pipeline
-                  :compute-pipeline compute-pipeline
-                  :resolution-buffer resolution-buffer
-                  :render-bind-groups render-bind-groups
-                  :compute-bind-groups compute-bind-groups})))
+    {:context context
+     :device device
+     :render-pipeline render-pipeline
+     :compute-pipeline compute-pipeline
+     :resolution-buffer resolution-buffer
+     :render-bind-groups render-bind-groups
+     :compute-bind-groups compute-bind-groups}))
 
 (defn init []
-  (.then (get-device)
-         sketch-start))
+  (start-sketch! init-sketch update-sketch))
