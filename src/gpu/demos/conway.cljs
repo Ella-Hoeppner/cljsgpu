@@ -68,7 +68,6 @@
   (unquotable
    (wort->wgsl
     '{:bindings [[uniform resolution vec2f
-                  uniform time f32
                   (storage read) grid [array u32]]]
       :functions
       {vertex (vertex
@@ -90,7 +89,6 @@
                          :builtin position}]
         {:location 0
          :type vec4f}
-        (= _ time)
         (let resolution-min (min resolution.x resolution.y))
         (let pos (/ (- pixel-position.xy
                        (* 0.5 (- resolution resolution-min)))
@@ -107,7 +105,6 @@
 
 (defn sketch-loop [{:keys [ctx
                            resolution-buffer
-                           time-buffer
                            device
                            render-pipeline
                            render-bind-groups
@@ -120,9 +117,6 @@
                 resolution-buffer
                 (js/Float32Array.
                  (ctx-resolution ctx)))
-  (write-buffer device
-                time-buffer
-                (js/Float32Array. [(u/seconds-since-startup)]))
 
   (let [encoder (create-command-encoder device)]
     (compute-pass encoder
@@ -148,16 +142,13 @@
   (let [ctx (create-context-canvas device)
         render-module (create-module device render-shader-wgsl)
         compute-module (create-module device compute-shader-wgsl)
-        render-pipeline (create-render-pipeline device 
+        render-pipeline (create-render-pipeline device
                                                 {:module render-module})
-        compute-pipeline (create-compute-pipeline device 
+        compute-pipeline (create-compute-pipeline device
                                                   {:module compute-module})
         resolution-buffer (create-buffer device
                                          #{:uniform :copy-dst}
                                          {:size 8})
-        time-buffer (create-buffer device
-                                   #{:uniform :copy-dst}
-                                   {:size 4})
         initial-cells (js/Uint32Array.
                        (repeatedly (* grid-size grid-size)
                                    #(if (> (rand) 0.5) 1 0)))
@@ -168,7 +159,6 @@
         render-bind-groups (map #(create-bind-group device
                                                     (pipeline-layout render-pipeline)
                                                     [resolution-buffer
-                                                     time-buffer
                                                      %])
                                 grid-buffers)
         compute-bind-groups (map #(create-bind-group
@@ -184,7 +174,6 @@
                   :render-pipeline render-pipeline
                   :compute-pipeline compute-pipeline
                   :resolution-buffer resolution-buffer
-                  :time-buffer time-buffer
                   :render-bind-groups render-bind-groups
                   :compute-bind-groups compute-bind-groups})))
 
