@@ -1,6 +1,7 @@
 (ns gpu.demos.conway
   (:require [gpu.util :as u]
-            [gpu.webgpu.core :refer [start-monocanvas-sketch!
+            [gpu.webgpu.core :refer [purefrag-shader
+                                     start-monocanvas-sketch!
                                      create-render-pipeline
                                      create-compute-pipeline
                                      create-buffer
@@ -8,7 +9,7 @@
                                      pipeline-layout
                                      set-pass-pipeline
                                      set-pass-bind-group
-                                     render-pass
+                                     purefrag-render-pass
                                      compute-pass
                                      create-command-encoder
                                      finish-command-encoder
@@ -64,42 +65,30 @@
 
 (def render-shader-wgsl
   (unquotable
-   (wort->wgsl
-    '{:bindings [[uniform resolution vec2f
-                  (storage read) grid [array u32]]]
-      :functions
-      {vertex (vertex
-               [vertex-index {:type u32
-                              :builtin vertex-index}]
-               {:builtin position
-                :type vec4f}
-               (let pos
-                 (array (vec2f -1 -1)
-                        (vec2f 1 -1)
-                        (vec2f -1 1)
-                        (vec2f 1 1)
-                        (vec2f 1 -1)
-                        (vec2f -1 1)))
-               (vec4f [pos vertex-index] 0 1))
-       fragment
-       (fragment
-        [pixel-position {:type vec4f
-                         :builtin position}]
-        {:location 0
-         :type vec4f}
-        (let resolution-min (min resolution.x resolution.y))
-        (let pos (/ (- pixel-position.xy
-                       (* 0.5 (- resolution resolution-min)))
-                    resolution-min))
-        (? (&& (>= pos.x 0)
-               (< pos.x 1)
-               (>= pos.y 0)
-               (< pos.y 1))
-           (vec4f (vec3f (f32 [grid (+ (i32 (* pos.x ~grid-size))
-                                       (* ~grid-size
-                                          (i32 (* pos.y ~grid-size))))]))
-                  1)
-           (vec4f 0 0 0 1)))}})))
+   (purefrag-shader
+    (wort->wgsl
+     '{:bindings [[uniform resolution vec2f
+                   (storage read) grid [array u32]]]
+       :functions
+       {fragment
+        (fragment
+         [pixel-position {:type vec4f
+                          :builtin position}]
+         {:location 0
+          :type vec4f}
+         (let resolution-min (min resolution.x resolution.y))
+         (let pos (/ (- pixel-position.xy
+                        (* 0.5 (- resolution resolution-min)))
+                     resolution-min))
+         (? (&& (>= pos.x 0)
+                (< pos.x 1)
+                (>= pos.y 0)
+                (< pos.y 1))
+            (vec4f (vec3f (f32 [grid (+ (i32 (* pos.x ~grid-size))
+                                        (* ~grid-size
+                                           (i32 (* pos.y ~grid-size))))]))
+                   1)
+            (vec4f 0 0 0 1)))}}))))
 
 (defn update-sketch [device
                      context
@@ -123,12 +112,12 @@
                        (set-pass-bind-group 0 (first compute-bind-groups)))
                   [(/ grid-size workgroup-size)
                    (/ grid-size workgroup-size)])
-    (render-pass encoder
-                 [(tex-view (current-context-texture context))]
-                 #(-> %
-                      (set-pass-pipeline render-pipeline)
-                      (set-pass-bind-group 0 (first render-bind-groups)))
-                 6)
+    (purefrag-render-pass
+     encoder
+     [(tex-view (current-context-texture context))]
+     #(-> %
+          (set-pass-pipeline render-pipeline)
+          (set-pass-bind-group 0 (first render-bind-groups))))
     (finish-command-encoder encoder device))
   (-> state
       (update :compute-bind-groups reverse)
@@ -136,9 +125,9 @@
 
 (defn init-sketch [device context]
   (let [render-pipeline (create-render-pipeline device
-                                                {:wgsl render-shader-wgsl})
+                                                {:shader render-shader-wgsl})
         compute-pipeline (create-compute-pipeline device
-                                                  {:wgsl compute-shader-wgsl})
+                                                  {:shader compute-shader-wgsl})
         resolution-buffer (create-buffer device
                                          #{:uniform :copy-dst}
                                          {:size 8})

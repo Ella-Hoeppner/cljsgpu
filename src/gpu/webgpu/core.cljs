@@ -1,5 +1,23 @@
 (ns gpu.webgpu.core
-  (:require [shadow.cljs.modern :refer [js-await]]))
+  (:require [gpu.wort.core :refer [wort->wgsl]]))
+
+(def purefrag-vert-shader-wgsl
+  (wort->wgsl
+   '{:functions
+     {vertex (vertex
+              [vertex-index {:type u32
+                             :builtin vertex-index}]
+              {:builtin position
+               :type vec4f}
+              (vec4f [(array (vec2f -1 -1)
+                             (vec2f 3 -1)
+                             (vec2f -1 3))
+                      vertex-index]
+                     0
+                     1))}}))
+
+(defn purefrag-shader [shader]
+  (str purefrag-vert-shader-wgsl shader))
 
 (defn default [m key default-value]
   (update m key #(or % default-value)))
@@ -47,17 +65,17 @@
                            (clj->js
                             (assoc options :code code))))
 
-(defn create-render-pipeline [device & [{:keys [module wgsl]
+(defn create-render-pipeline [device & [{:keys [module shader]
                                          :as options}]]
   ^js
   (.createRenderPipeline
    device
    (clj->js
     (let [default-module (or module
-                             (when wgsl
-                               (create-module device wgsl)))]
+                             (when shader
+                               (create-module device shader)))]
       (-> options
-          (dissoc :module :wgsl)
+          (dissoc :module :shader)
           (update :layout
                   #(or % "auto"))
           (update :fragment
@@ -73,17 +91,17 @@
                         (default :entryPoint "vertex")
                         (default :module default-module)))))))))
 
-(defn create-compute-pipeline [device & [{:keys [module wgsl]
+(defn create-compute-pipeline [device & [{:keys [module shader]
                                           :as options}]]
   ^js
   (.createComputePipeline
    device
    (clj->js
     (let [default-module (or module
-                             (when wgsl
-                               (create-module device wgsl)))]
+                             (when shader
+                               (create-module device shader)))]
       (-> options
-          (dissoc :module :wgsl)
+          (dissoc :module :shader)
           (update :layout
                   #(or % "auto"))
           (update :compute
@@ -185,6 +203,10 @@
     (callback pass)
     (.draw pass vertices)
     (.end pass)))
+
+(defn purefrag-render-pass [command-encoder color-attachements callback
+                            & [options]]
+  (render-pass command-encoder color-attachements callback 3 options))
 
 (defn finish-command-encoder [encoder & [queue-or-device]]
   (let [completion (.finish encoder)]

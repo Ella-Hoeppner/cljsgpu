@@ -257,9 +257,10 @@
                     "\n}\n"))
              structs)))
 
-(defn wort->wgsl [shader]
-  (str (bindings->wgsl (:bindings shader))
+(defn wort->wgsl [{:keys [bindings structs functions]}]
+  (str (bindings->wgsl bindings)
        "\n"
-       (structs->wgsl (:structs shader))
+       (structs->wgsl structs)
        "\n"
-       (functions->wgsl (:functions shader))))
+       (functions->wgsl functions)
+       "\n"))
