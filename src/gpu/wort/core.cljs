@@ -51,7 +51,6 @@
 
               (= '? f)
               (let [[condition true-case false-case] (map form->wgsl args)]
-                (u/log [condition true-case false-case])
                 (str "select("
                      true-case
                      ","
@@ -126,15 +125,39 @@
                         forms)))))))
 
 (defn function->wgsl [name fn-spec]
-  (let [arg-list-index (some #(when (vector? (nth fn-spec %)) %) (range))
+  (let [first-element (first fn-spec)
+        second-element (second fn-spec)
+        second-element-is-workgroup-size? (or
+                                           (number? second-element)
+
+                                           (and (vector? second-element)
+                                                (reduce #(and %1 %2)
+                                                        (map number?
+                                                             second-element))))
+        arg-list-index
+        (cond
+          ('#{vertex fragment} first-element) 1
+          (= 'compute first-element)
+          (if second-element-is-workgroup-size? 2 1)
+          :else 0)
         tags (take arg-list-index fn-spec)
         argument-list (nth fn-spec arg-list-index)
         return (nth fn-spec (inc arg-list-index))
         body (drop (+ 2 arg-list-index) fn-spec)]
     (str
      (when (seq tags)
-       (str (apply str (join " " (map (partial str "@") tags)))
-            " "))
+       ({'vertex "@vertex\n"
+         'fragment "@fragment\n"
+         'compute (str "@compute"
+                       (when second-element-is-workgroup-size?
+                         (str " @workgroup_size("
+                              (if (number? second)
+                                second
+                                (join ", " (take 3 (concat second-element
+                                                           (repeat 1)))))
+                              ") "))
+                       "\n")}
+        first-element))
      "fn "
      (symbol->wgsl name)
      (if (empty? argument-list)
@@ -212,7 +235,6 @@
 (defn structs->wgsl [structs]
   (join "\n"
         (map (fn [[struct-name struct-fields]]
-               (u/log struct-name struct-fields)
                (str "struct " (symbol->wgsl struct-name) " {\n"
                     (indent (join ",\n"
                                   (map (fn [[field-name field-type]]
