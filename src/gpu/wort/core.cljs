@@ -32,6 +32,7 @@
 
 (defn form->wgsl [form]
   (cond
+    (string? form) form
     (number? form) (str form)
     (boolean? form) (str form)
     (symbol? form) (symbol->wgsl form)
@@ -118,7 +119,7 @@
                                               args))
                    ")")
 
-              :else (str f
+              :else (str (form->wgsl f)
                          "("
                          (join ", "
                                (map form->wgsl args))

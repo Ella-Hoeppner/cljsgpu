@@ -22,19 +22,43 @@
    (wort->wgsl
     '{:bindings [[uniform resolution vec2f
                   uniform time f32]
-                 [(storage read) size vec2f
+                 [(storage read) size vec2u
                   (storage read) current [array u32]
                   (storage read-write) next [array u32]]]
       :functions
-      {conway (compute
-               [8 8]
-               [index {:type u32
-                       :builtin local-invocation-index}]
-               nil
-               (for (var i u32 0) (< i 10) (++ i)
-                    (when (> (+ index i) 7)
-                      break)))
-       
+      {get-index ([x u32
+                   y u32]
+                  u32
+                  (+ (* (% y size.y)
+                        size.x)
+                     (% x size.x)))
+       get-cell ([x u32
+                  y u32]
+                 u32
+                 [current (get-index x y)])
+       count-neighbors ([x u32
+                         y u32]
+                        u32
+                        (+ (get-cell (- x 1) (- y 1))
+                           (get-cell x (- y 1))
+                           (get-cell (+ x 1) (- y 1))
+                           (get-cell (+ x 1) y)
+                           (get-cell (+ x 1) (+ y 1))
+                           (get-cell x (+ y 1))
+                           (get-cell (- x 1) (+ y 1))
+                           (get-cell (- x 1) y)))
+       compute (compute
+                [8 8]
+                [grid {:type vec3u
+                       :builtin global-invocation-id}]
+                nil
+                (let neighbors (count-neighbors grid.x grid.y))
+                (= [next (get-index grid.x grid.y)]
+                   (? (== (get-cell grid.x grid.y) "1u")
+                      (u32 (== neighbors "3u"))
+                      (u32 (|| (== neighbors "2u")
+                               (== neighbors "3u"))))))
+
        vertex (vertex
                [vertex-index {:type u32
                               :builtin vertex-index}]
