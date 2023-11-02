@@ -6,7 +6,7 @@
 
 (defn get-adapter []
   (when-not js/navigator.gpu
-    (throw "CLJSGPU: this browser doesn't support WebGPU! :("))
+    (throw (js/Error. "CLJSGPU: this browser doesn't support WebGPU! :(")))
   (js/navigator.gpu.requestAdapter))
 
 (defn get-device
@@ -72,7 +72,15 @@
 
 (def buffer-usage-map
   {:uniform js/GPUBufferUsage.UNIFORM
-   :copy-dst js/GPUBufferUsage.COPY_DST})
+   :copy-dst js/GPUBufferUsage.COPY_DST
+   :copy-src js/GPUBufferUsage.COPY_SRC
+   :index js/GPUBufferUsage.INDEX
+   :indirect js/GPUBufferUsage.INDIRECT
+   :map-read js/GPUBufferUsage.MAP_READ
+   :map-write js/GPUBufferUsage.MAP_WRITE
+   :query-resolve js/GPUBufferUsage.QUERY_RESOLVE
+   :storage js/GPUBufferUsage.STORAGE
+   :vertex js/GPUBufferUsage.VERTEX})
 
 (defn write-buffer [device buffer data
                     & [{:keys [buffer-offset data-offset size]}]]

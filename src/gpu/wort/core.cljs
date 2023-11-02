@@ -18,9 +18,9 @@
                                    "<"
                                    (join ", " (rest type-expression))
                                    ">")
-    :else (throw (str "wort: Invalid type expression \""
-                      type-expression
-                      "\""))))
+    :else (throw (js/Error. (str "wort: Invalid type expression \""
+                                 type-expression
+                                 "\"")))))
 
 (def assignment-operators
   '#{= "/=" *= -= +=})

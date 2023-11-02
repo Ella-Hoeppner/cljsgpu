@@ -126,12 +126,6 @@
                                       (pipeline-layout pipeline)
                                       [resolution-buffer
                                        time-buffer])]
-    (queue-render-pass device
-                       [(tex-view (current-ctx-texture ctx))]
-                       #(-> %
-                            (set-pass-pipeline pipeline)
-                            (set-pass-bind-group 0 bind-group))
-                       6)
     (sketch-loop {:ctx ctx
                   :device device
                   :module module
