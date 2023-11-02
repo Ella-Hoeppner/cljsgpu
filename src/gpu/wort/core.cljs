@@ -151,10 +151,9 @@
          'compute (str "@compute"
                        (when second-element-is-workgroup-size?
                          (str " @workgroup_size("
-                              (if (number? second)
-                                second
-                                (join ", " (take 3 (concat second-element
-                                                           (repeat 1)))))
+                              (if (number? second-element)
+                                second-element
+                                (join ", " second-element))
                               ") "))
                        "\n")}
         first-element))
