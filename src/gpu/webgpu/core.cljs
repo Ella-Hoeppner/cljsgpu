@@ -211,13 +211,37 @@
 
 (defn start-sketch! [init-fn update-fn & [{:keys [device]}]]
   (let [start-from-device (fn [device]
-                            (let [initial-state (init-fn device)]
-                              ((fn loop-fn [state]
-                                 (js/requestAnimationFrame
-                                  (partial loop-fn
-                                           (update-fn device
-                                                      state))))
-                               initial-state)))]
+                            (let [initial-state (when init-fn
+                                                  (init-fn device))]
+                              (when update-fn
+                                ((fn loop-fn [state]
+                                   (js/requestAnimationFrame
+                                    (partial loop-fn
+                                             (update-fn device
+                                                        state))))
+                                 initial-state))))]
+    (if device
+      (start-from-device device)
+      (.then (get-device) start-from-device))))
+
+(defn start-monocanvas-sketch! [init-fn update-fn & [{:keys [context
+                                                             device]
+                                                      :as options}]]
+  (let [start-from-device
+        (fn [device]
+          (let [canvas-context (or context
+                                   (create-context-canvas device options))
+                initial-state (when init-fn
+                                (init-fn device
+                                         canvas-context))]
+            (when update-fn
+              ((fn loop-fn [state]
+                 (js/requestAnimationFrame
+                  (partial loop-fn
+                           (update-fn device
+                                      canvas-context
+                                      state))))
+               initial-state))))]
     (if device
       (start-from-device device)
       (.then (get-device) start-from-device))))

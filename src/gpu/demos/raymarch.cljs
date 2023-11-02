@@ -1,7 +1,6 @@
 (ns gpu.demos.raymarch
   (:require [gpu.util :as u]
-            [gpu.webgpu.core :refer [get-device
-                                     start-sketch!
+            [gpu.webgpu.core :refer [start-monocanvas-sketch!
                                      create-render-pipeline
                                      create-context-canvas
                                      create-buffer
@@ -91,8 +90,8 @@
        (vec4f 0 0 0 1))}}))
 
 (defn update-sketch [device
-                     {:keys [context
-                             resolution-buffer
+                     context
+                     {:keys [resolution-buffer
                              time-buffer
                              pipeline
                              bind-group]
@@ -115,9 +114,8 @@
     (finish-command-encoder encoder device))
   state)
 
-(defn init-sketch [device]
-  (let [context (create-context-canvas device)
-        pipeline (create-render-pipeline device {:wgsl shader-code})
+(defn init-sketch [device context]
+  (let [pipeline (create-render-pipeline device {:wgsl shader-code})
         resolution-buffer (create-buffer device
                                          #{:uniform :copy-dst}
                                          {:size 8})
@@ -128,12 +126,10 @@
                                       (pipeline-layout pipeline)
                                       [resolution-buffer
                                        time-buffer])]
-    {:context context
-     :device device
-     :pipeline pipeline
+    {:pipeline pipeline
      :resolution-buffer resolution-buffer
      :time-buffer time-buffer
      :bind-group bind-group}))
 
 (defn init []
-  (start-sketch! init-sketch update-sketch))
+  (start-monocanvas-sketch! init-sketch update-sketch))

@@ -1,9 +1,8 @@
 (ns gpu.demos.conway
   (:require [gpu.util :as u]
-            [gpu.webgpu.core :refer [start-sketch!
+            [gpu.webgpu.core :refer [start-monocanvas-sketch!
                                      create-render-pipeline
                                      create-compute-pipeline
-                                     create-context-canvas
                                      create-buffer
                                      create-bind-group
                                      pipeline-layout
@@ -103,8 +102,8 @@
            (vec4f 0 0 0 1)))}})))
 
 (defn update-sketch [device
-                     {:keys [context
-                             resolution-buffer
+                     context
+                     {:keys [resolution-buffer
                              render-pipeline
                              render-bind-groups
                              compute-pipeline
@@ -135,9 +134,8 @@
       (update :compute-bind-groups reverse)
       (update :render-bind-groups reverse)))
 
-(defn init-sketch [device]
-  (let [context (create-context-canvas device)
-        render-pipeline (create-render-pipeline device
+(defn init-sketch [device context]
+  (let [render-pipeline (create-render-pipeline device
                                                 {:wgsl render-shader-wgsl})
         compute-pipeline (create-compute-pipeline device
                                                   {:wgsl compute-shader-wgsl})
@@ -165,13 +163,11 @@
     (write-buffer device
                   (first grid-buffers)
                   initial-cells)
-    {:context context
-     :device device
-     :render-pipeline render-pipeline
+    {:render-pipeline render-pipeline
      :compute-pipeline compute-pipeline
      :resolution-buffer resolution-buffer
      :render-bind-groups render-bind-groups
      :compute-bind-groups compute-bind-groups}))
 
 (defn init []
-  (start-sketch! init-sketch update-sketch))
+  (start-monocanvas-sketch! init-sketch update-sketch))
