@@ -20,10 +20,11 @@
 (def shader-code
   (u/log
    (wort->wgsl
-    '{:uniforms [[resolution vec2f
-                  time f32]]
-      :structs {Ray [pos vec3f
-                     dir vec3f]}
+    '{:bindings [[uniform resolution vec2f
+                  uniform time f32]
+                 [(storage read) size vec2f
+                  (storage read) current [array u32]
+                  (storage read-write) next [array u32]]]
       :functions
       {conway (compute
                [8 8]

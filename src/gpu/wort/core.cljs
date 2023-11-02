@@ -11,6 +11,17 @@
   (escape (str s)
           {"-" "_"}))
 
+(defn type->wgsl [type-expression]
+  (cond
+    (symbol? type-expression) (symbol->wgsl type-expression)
+    (vector? type-expression) (str (symbol->wgsl (first type-expression))
+                                   "<"
+                                   (join ", " (rest type-expression))
+                                   ">")
+    :else (throw (str "wort: Invalid type expression \""
+                      type-expression
+                      "\""))))
+
 (def assignment-operators
   '#{= "/=" *= -= +=})
 
@@ -45,7 +56,7 @@
                    " "
                    (symbol->wgsl (first args))
                    (when (= (count args) 3)
-                     (str " : " (symbol->wgsl (second args)) " "))
+                     (str " : " (type->wgsl (second args)) " "))
                    " = "
                    (form->wgsl (last args)))
 
@@ -58,7 +69,7 @@
                      ","
                      condition
                      ")"))
-              
+
               (= 'if f)
               (let [[condition true-block false-block] args
                     block-body (fn [block]
@@ -76,7 +87,7 @@
                        (str "\nelse {\n"
                             (block-body false-block)
                             "\n}"))))
-              
+
               (= 'when f)
               (str "if "
                    (form->wgsl (first args))
@@ -124,6 +135,28 @@
                                 (list (str "return " (last forms))))
                         forms)))))))
 
+(defn field-list->wgsl [field-list]
+  (join
+   ",\n"
+   (map (fn [[argument-name argument-params]]
+          (let [argument-type (if (map? argument-params)
+                                (:type argument-params)
+                                argument-params)]
+            (indent
+             (str (when (map? argument-params)
+                    (reduce #(str %1
+                                  "@"
+                                  (form->wgsl (symbol (first %2)))
+                                  "("
+                                  (form->wgsl (second %2))
+                                  ") ")
+                            ""
+                            (dissoc argument-params :type)))
+                  (symbol->wgsl argument-name)
+                  " : "
+                  argument-type))))
+        (partition 2 field-list))))
+
 (defn function->wgsl [name fn-spec]
   (let [first-element (first fn-spec)
         second-element (second fn-spec)
@@ -161,34 +194,13 @@
      (symbol->wgsl name)
      (if (empty? argument-list)
        "() "
-       (str "(\n"
-            (join
-             ",\n"
-             (map (fn [[argument-name argument-params]]
-                    (let [argument-type (if (map? argument-params)
-                                          (:type argument-params)
-                                          argument-params)]
-                      (indent
-                       (str (when (map? argument-params)
-                              (reduce #(str %1
-                                            "@"
-                                            (form->wgsl (symbol (first %2)))
-                                            "("
-                                            (form->wgsl (second %2))
-                                            ") ")
-                                      ""
-                                      (dissoc argument-params :type)))
-                            (symbol->wgsl argument-name)
-                            " : "
-                            argument-type))))
-                  (partition 2 argument-list)))
-            "\n) "))
+       (str "(\n" (field-list->wgsl argument-list) "\n) "))
      (when return
        (str "-> "
             (if (map? return)
-              (str (reduce #(str %1 
-                                 "@" 
-                                 (form->wgsl (symbol(first %2))) 
+              (str (reduce #(str %1
+                                 "@"
+                                 (form->wgsl (symbol (first %2)))
                                  "("
                                  (form->wgsl (second %2))
                                  ") ")
@@ -212,22 +224,27 @@
                        functions)
                   (repeat "\n"))))))
 
-(defn uniforms->wgsl [uniforms]
+(defn bindings->wgsl [bindings]
   (str (join "\n"
-             (mapcat (fn [uniform-group group-index]
-                       (map (fn [[uniform-name uniform-type] binding-index]
+             (mapcat (fn [binding-group group-index]
+                       (map (fn [[var-type binding-name binding-type]
+                                 binding-index]
                               (str "@group("
                                    group-index
                                    ") @binding("
                                    binding-index
-                                   ") var<uniform> "
-                                   (symbol->wgsl uniform-name)
+                                   ") var<"
+                                   (if (seq? var-type)
+                                     (join ", " (map symbol->wgsl var-type))
+                                     (symbol->wgsl var-type))
+                                   "> "
+                                   (symbol->wgsl binding-name)
                                    " : "
-                                   (symbol->wgsl uniform-type)
+                                   (type->wgsl binding-type)
                                    ";"))
-                            (partition 2 uniform-group)
+                            (partition 3 binding-group)
                             (range)))
-                     uniforms
+                     bindings
                      (range)))
        "\n"))
 
@@ -235,17 +252,12 @@
   (join "\n"
         (map (fn [[struct-name struct-fields]]
                (str "struct " (symbol->wgsl struct-name) " {\n"
-                    (indent (join ",\n"
-                                  (map (fn [[field-name field-type]]
-                                         (str (symbol->wgsl field-name)
-                                              ": "
-                                              field-type))
-                                       (partition 2 struct-fields))))
+                    (field-list->wgsl struct-fields)
                     "\n}\n"))
              structs)))
 
 (defn wort->wgsl [shader]
-  (str (uniforms->wgsl (:uniforms shader))
+  (str (bindings->wgsl (:bindings shader))
        "\n"
        (structs->wgsl (:structs shader))
        "\n"

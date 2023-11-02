@@ -20,8 +20,8 @@
 (def shader-code
   (u/log
    (wort->wgsl
-    '{:uniforms [[resolution vec2f
-                  time f32]]
+    '{:bindings [[uniform resolution vec2f
+                  uniform time f32]]
       :structs {Ray [pos vec3f
                      dir vec3f]}
       :functions
