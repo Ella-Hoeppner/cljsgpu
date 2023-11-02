@@ -56,9 +56,9 @@
                (let neighbors (count-neighbors grid.x grid.y))
                (= [next (get-index grid.x grid.y)]
                   (? (== (get-cell grid.x grid.y) "1u")
-                     (u32 (== neighbors "3u"))
                      (u32 (|| (== neighbors "2u")
-                              (== neighbors "3u"))))))}}))
+                              (== neighbors "3u")))
+                     (u32 (== neighbors "3u")))))}}))
 
 (def render-shader-wgsl
   (wort->wgsl
@@ -94,10 +94,10 @@
               (< pos.x 1)
               (>= pos.y 0)
               (< pos.y 1))
-          (vec4f 0 0 0 1)
           (vec4f (vec3f (f32 [grid (+ (i32 (* pos.x 80))
                                       (* 80 (i32 (* pos.y 80))))]))
-                 1)))}}))
+                 1)
+          (vec4f 0 0 0 1)))}}))
 
 (defn sketch-loop [{:keys [ctx
                            resolution-buffer

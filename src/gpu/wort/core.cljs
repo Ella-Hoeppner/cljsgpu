@@ -62,7 +62,7 @@
                    (form->wgsl (last args)))
 
               (= '? f)
-              (let [[condition true-case false-case] (map form->wgsl args)]
+              (let [[condition false-case true-case] (map form->wgsl args)]
                 (str "select("
                      true-case
                      ","
