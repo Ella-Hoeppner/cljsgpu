@@ -24,16 +24,15 @@
 
 (def compute-shader-wgsl
   (wort->wgsl
-   '{:bindings [[(storage read) size vec2u
-                 (storage read) current [array u32]
+   '{:bindings [[(storage read) current [array u32]
                  (storage read-write) next [array u32]]]
      :functions
      {get-index ([x u32
                   y u32]
                  u32
-                 (+ (* (% y size.y)
-                       size.x)
-                    (% x size.x)))
+                 (+ (* (% y 80)
+                       80)
+                    (% x 80)))
       get-cell ([x u32
                  y u32]
                 u32
@@ -64,7 +63,8 @@
 (def render-shader-wgsl
   (wort->wgsl
    '{:bindings [[uniform resolution vec2f
-                 uniform time f32]]
+                 uniform time f32
+                 (storage read) grid [array u32]]]
      :functions
      {vertex (vertex
               [vertex-index {:type u32
@@ -90,27 +90,25 @@
        (let pos (/ (- pixel-position.xy
                       (* 0.5 (- resolution resolution-min)))
                    resolution-min))
-       (vec4f pos 0 1))}}))
+       (? (&& (>= pos.x 0)
+              (< pos.x 1)
+              (>= pos.y 0)
+              (< pos.y 1))
+          (vec4f 0 0 0 1)
+          (vec4f (vec3f (f32 [grid (+ (i32 (* pos.x 80))
+                                      (* 80 (i32 (* pos.y 80))))]))
+                 1)))}}))
 
 (defn sketch-loop [{:keys [ctx
                            resolution-buffer
                            time-buffer
                            device
                            render-pipeline
-                           render-bind-group
+                           render-bind-groups
                            compute-pipeline
                            compute-bind-groups]
                     :as state}]
   (maximize-canvas ctx.canvas)
-
-  (let [command-encoder ^js (.createCommandEncoder device)
-        pass-encoder ^js (.beginComputePass command-encoder)]
-    (.setPipeline pass-encoder compute-pipeline)
-    (.setBindGroup pass-encoder 0 (first compute-bind-groups))
-    (.dispatchWorkgroups pass-encoder
-                         (/ grid-size workgroup-size)
-                         (/ grid-size workgroup-size))
-    (.end pass-encoder))
   
   (write-buffer device
                 resolution-buffer
@@ -119,62 +117,72 @@
   (write-buffer device
                 time-buffer
                 (js/Float32Array. [(u/seconds-since-startup)]))
-  (u/log device)
-  (let [encoder (create-command-encoder device)]
+
+  (let [encoder (create-command-encoder device)
+        compute-pass-encoder ^js (.beginComputePass encoder)]
+    (.setPipeline compute-pass-encoder compute-pipeline)
+    (.setBindGroup compute-pass-encoder 0 (first compute-bind-groups))
+    (.dispatchWorkgroups compute-pass-encoder
+                         (/ grid-size workgroup-size)
+                         (/ grid-size workgroup-size))
+    (.end compute-pass-encoder)
     (render-pass encoder
                  [(tex-view (current-ctx-texture ctx))]
                  #(-> %
                       (set-pass-pipeline render-pipeline)
-                      (set-pass-bind-group 0 render-bind-group))
+                      (set-pass-bind-group 0 (first render-bind-groups)))
                  6)
     (finish-command-encoder encoder device))
   (js/requestAnimationFrame
    (partial sketch-loop
             (-> state
-                (update :compute-bind-groups reverse)))))
+                (update :compute-bind-groups reverse)
+                (update :render-bind-groups reverse)))))
 
 (defn sketch-start [device]
   (let [ctx (create-context-canvas device)
         render-module (create-module device render-shader-wgsl)
         render-pipeline (create-render-pipeline device {:module render-module})
-        resolution-buffer (create-buffer device
-                                         #{:uniform :copy-dst}
-                                         {:size 8})
-        time-buffer (create-buffer device
-                                   #{:uniform :copy-dst}
-                                   {:size 4})
-        render-bind-group (create-bind-group device
-                                             (pipeline-layout render-pipeline)
-                                             [resolution-buffer
-                                              time-buffer])
-
-        initial-cells (js/Uint32Array.
-                       (repeatedly (* grid-size grid-size)
-                                   #(if (> (rand) 0.5) 1 0)))
-        grid-buffers (u/gen 2 (create-buffer device
-                                             #{:storage}
-                                             {:size initial-cells.byteLength}))
-        size-buffer (create-buffer device
-                                   #{:uniform :storage :copy-dst}
-                                   {:size 8})
         compute-module (create-module device compute-shader-wgsl)
         compute-pipeline ^js (.createComputePipeline
                               device
                               (clj->js {:layout "auto"
                                         :compute {:module compute-module
                                                   :entryPoint "compute"}}))
+        resolution-buffer (create-buffer device
+                                         #{:uniform :copy-dst}
+                                         {:size 8})
+        time-buffer (create-buffer device
+                                   #{:uniform :copy-dst}
+                                   {:size 4})
+        initial-cells (js/Uint32Array.
+                       (repeatedly (* grid-size grid-size)
+                                   #(if (> (rand) 0.5) 1 0)))
+        grid-buffers (u/gen 2 (create-buffer device
+                                             #{:storage :copy-dst}
+                                             {:size initial-cells.byteLength}))
+
+        render-bind-groups (map #(create-bind-group device
+                                                    (pipeline-layout render-pipeline)
+                                                    [resolution-buffer
+                                                     time-buffer
+                                                     %])
+                                grid-buffers)
         compute-bind-groups (map #(create-bind-group
                                    device
                                    (pipeline-layout compute-pipeline)
-                                   (vec (cons size-buffer %)))
+                                   (vec %))
                                  [grid-buffers (reverse grid-buffers)])]
+    (write-buffer device
+                  (first grid-buffers)
+                  initial-cells)
     (sketch-loop {:ctx ctx
                   :device device
                   :render-pipeline render-pipeline
                   :compute-pipeline compute-pipeline
                   :resolution-buffer resolution-buffer
                   :time-buffer time-buffer
-                  :render-bind-group render-bind-group
+                  :render-bind-groups render-bind-groups
                   :compute-bind-groups compute-bind-groups})))
 
 (defn init []
