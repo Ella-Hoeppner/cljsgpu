@@ -98,7 +98,7 @@
                (>= pos.y 0)
                (< pos.y 1))
            (vec4f (vec3f (f32 [grid (+ (i32 (* pos.x ~grid-size))
-                                       (* ~grid-size 
+                                       (* ~grid-size
                                           (i32 (* pos.y ~grid-size))))]))
                   1)
            (vec4f 0 0 0 1)))}})))
@@ -112,7 +112,7 @@
                            compute-bind-groups]
                     :as state}]
   (maximize-canvas ctx.canvas)
-  
+
   (write-buffer device
                 resolution-buffer
                 (js/Float32Array.
@@ -123,7 +123,7 @@
                   #(-> %
                        (set-pass-pipeline compute-pipeline)
                        (set-pass-bind-group 0 (first compute-bind-groups)))
-                  [(/ grid-size workgroup-size) 
+                  [(/ grid-size workgroup-size)
                    (/ grid-size workgroup-size)])
     (render-pass encoder
                  [(tex-view (current-ctx-texture ctx))]
