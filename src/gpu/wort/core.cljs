@@ -14,7 +14,7 @@
 (defn type->wgsl [type-expression]
   (cond
     (symbol? type-expression) (symbol->wgsl type-expression)
-    (vector? type-expression) (str (symbol->wgsl (first type-expression))
+    (vector? type-expression) (str (type->wgsl (first type-expression))
                                    "<"
                                    (join ", " (rest type-expression))
                                    ">")

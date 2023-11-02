@@ -10,6 +10,7 @@
                                      set-pass-pipeline
                                      set-pass-bind-group
                                      render-pass
+                                     compute-pass
                                      create-command-encoder
                                      finish-command-encoder
                                      current-ctx-texture
@@ -17,87 +18,91 @@
                                      write-buffer]]
             [gpu.dom.canvas :refer [maximize-canvas
                                     ctx-resolution]]
-            [gpu.wort.core :refer [wort->wgsl]]))
+            [gpu.wort.core :refer [wort->wgsl]]
+            [gpu.wort.tools :refer-macros [unquotable]]))
 
-(def grid-size 80)
+(def grid-size 200)
 (def workgroup-size 8)
 
 (def compute-shader-wgsl
-  (wort->wgsl
-   '{:bindings [[(storage read) current [array u32]
-                 (storage read-write) next [array u32]]]
-     :functions
-     {get-index ([x u32
+  (unquotable
+   (wort->wgsl
+    '{:bindings [[(storage read) current [array u32]
+                  (storage read-write) next [array u32]]]
+      :functions
+      {get-index ([x u32
+                   y u32]
+                  u32
+                  (+ (* (% y ~grid-size)
+                        ~grid-size)
+                     (% x ~grid-size)))
+       get-cell ([x u32
                   y u32]
                  u32
-                 (+ (* (% y 80)
-                       80)
-                    (% x 80)))
-      get-cell ([x u32
-                 y u32]
-                u32
-                [current (get-index x y)])
-      count-neighbors ([x u32
-                        y u32]
-                       u32
-                       (+ (get-cell (- x 1) (- y 1))
-                          (get-cell x (- y 1))
-                          (get-cell (+ x 1) (- y 1))
-                          (get-cell (+ x 1) y)
-                          (get-cell (+ x 1) (+ y 1))
-                          (get-cell x (+ y 1))
-                          (get-cell (- x 1) (+ y 1))
-                          (get-cell (- x 1) y)))
-      compute (compute
-               [8 8]
-               [grid {:type vec3u
-                      :builtin global-invocation-id}]
-               nil
-               (let neighbors (count-neighbors grid.x grid.y))
-               (= [next (get-index grid.x grid.y)]
-                  (? (== (get-cell grid.x grid.y) "1u")
-                     (u32 (|| (== neighbors "2u")
-                              (== neighbors "3u")))
-                     (u32 (== neighbors "3u")))))}}))
+                 [current (get-index x y)])
+       count-neighbors ([x u32
+                         y u32]
+                        u32
+                        (+ (get-cell (- x 1) (- y 1))
+                           (get-cell x (- y 1))
+                           (get-cell (+ x 1) (- y 1))
+                           (get-cell (+ x 1) y)
+                           (get-cell (+ x 1) (+ y 1))
+                           (get-cell x (+ y 1))
+                           (get-cell (- x 1) (+ y 1))
+                           (get-cell (- x 1) y)))
+       compute (compute
+                [8 8]
+                [grid {:type vec3u
+                       :builtin global-invocation-id}]
+                nil
+                (let neighbors (count-neighbors grid.x grid.y))
+                (= [next (get-index grid.x grid.y)]
+                   (? (== (get-cell grid.x grid.y) "1u")
+                      (u32 (|| (== neighbors "2u")
+                               (== neighbors "3u")))
+                      (u32 (== neighbors "3u")))))}})))
 
 (def render-shader-wgsl
-  (wort->wgsl
-   '{:bindings [[uniform resolution vec2f
-                 uniform time f32
-                 (storage read) grid [array u32]]]
-     :functions
-     {vertex (vertex
-              [vertex-index {:type u32
-                             :builtin vertex-index}]
-              {:builtin position
-               :type vec4f}
-              (let pos
-                (array (vec2f -1 -1)
-                       (vec2f 1 -1)
-                       (vec2f -1 1)
-                       (vec2f 1 1)
-                       (vec2f 1 -1)
-                       (vec2f -1 1)))
-              (vec4f [pos vertex-index] 0 1))
-      fragment
-      (fragment
-       [pixel-position {:type vec4f
-                        :builtin position}]
-       {:location 0
-        :type vec4f}
-       (= _ time)
-       (let resolution-min (min resolution.x resolution.y))
-       (let pos (/ (- pixel-position.xy
-                      (* 0.5 (- resolution resolution-min)))
-                   resolution-min))
-       (? (&& (>= pos.x 0)
-              (< pos.x 1)
-              (>= pos.y 0)
-              (< pos.y 1))
-          (vec4f (vec3f (f32 [grid (+ (i32 (* pos.x 80))
-                                      (* 80 (i32 (* pos.y 80))))]))
-                 1)
-          (vec4f 0 0 0 1)))}}))
+  (unquotable
+   (wort->wgsl
+    '{:bindings [[uniform resolution vec2f
+                  uniform time f32
+                  (storage read) grid [array u32]]]
+      :functions
+      {vertex (vertex
+               [vertex-index {:type u32
+                              :builtin vertex-index}]
+               {:builtin position
+                :type vec4f}
+               (let pos
+                 (array (vec2f -1 -1)
+                        (vec2f 1 -1)
+                        (vec2f -1 1)
+                        (vec2f 1 1)
+                        (vec2f 1 -1)
+                        (vec2f -1 1)))
+               (vec4f [pos vertex-index] 0 1))
+       fragment
+       (fragment
+        [pixel-position {:type vec4f
+                         :builtin position}]
+        {:location 0
+         :type vec4f}
+        (= _ time)
+        (let resolution-min (min resolution.x resolution.y))
+        (let pos (/ (- pixel-position.xy
+                       (* 0.5 (- resolution resolution-min)))
+                    resolution-min))
+        (? (&& (>= pos.x 0)
+               (< pos.x 1)
+               (>= pos.y 0)
+               (< pos.y 1))
+           (vec4f (vec3f (f32 [grid (+ (i32 (* pos.x ~grid-size))
+                                       (* ~grid-size 
+                                          (i32 (* pos.y ~grid-size))))]))
+                  1)
+           (vec4f 0 0 0 1)))}})))
 
 (defn sketch-loop [{:keys [ctx
                            resolution-buffer
@@ -118,14 +123,13 @@
                 time-buffer
                 (js/Float32Array. [(u/seconds-since-startup)]))
 
-  (let [encoder (create-command-encoder device)
-        compute-pass-encoder ^js (.beginComputePass encoder)]
-    (.setPipeline compute-pass-encoder compute-pipeline)
-    (.setBindGroup compute-pass-encoder 0 (first compute-bind-groups))
-    (.dispatchWorkgroups compute-pass-encoder
-                         (/ grid-size workgroup-size)
-                         (/ grid-size workgroup-size))
-    (.end compute-pass-encoder)
+  (let [encoder (create-command-encoder device)]
+    (compute-pass encoder
+                  #(-> %
+                       (set-pass-pipeline compute-pipeline)
+                       (set-pass-bind-group 0 (first compute-bind-groups)))
+                  [(/ grid-size workgroup-size) 
+                   (/ grid-size workgroup-size)])
     (render-pass encoder
                  [(tex-view (current-ctx-texture ctx))]
                  #(-> %

@@ -135,6 +135,15 @@
   (or device.defaultEncoder
       (set! device.defaultEncoder (create-command-encoder device))))
 
+(defn compute-pass [command-encoder callback workgroup-count]
+  (let [pass ^js (.beginComputePass command-encoder)]
+    (callback pass)
+    (if (number? workgroup-count)
+      (.dispatchWorkgroups pass workgroup-count)
+      (let [[x y z] (concat workgroup-count (repeat 1))]
+        (.dispatchWorkgroups pass x y z)))
+    (.end pass)))
+
 (defn render-pass [command-encoder color-attachements callback vertices
                    & [options]]
   (let [pass
