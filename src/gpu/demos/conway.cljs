@@ -3,6 +3,7 @@
             [gpu.webgpu.core :refer [get-device
                                      create-module
                                      create-render-pipeline
+                                     create-compute-pipeline
                                      create-context-canvas
                                      create-buffer
                                      create-bind-group
@@ -146,13 +147,11 @@
 (defn sketch-start [device]
   (let [ctx (create-context-canvas device)
         render-module (create-module device render-shader-wgsl)
-        render-pipeline (create-render-pipeline device {:module render-module})
         compute-module (create-module device compute-shader-wgsl)
-        compute-pipeline ^js (.createComputePipeline
-                              device
-                              (clj->js {:layout "auto"
-                                        :compute {:module compute-module
-                                                  :entryPoint "compute"}}))
+        render-pipeline (create-render-pipeline device 
+                                                {:module render-module})
+        compute-pipeline (create-compute-pipeline device 
+                                                  {:module compute-module})
         resolution-buffer (create-buffer device
                                          #{:uniform :copy-dst}
                                          {:size 8})

@@ -70,6 +70,24 @@
                       (default :entryPoint "vertex")
                       (default :module module))))))))
 
+(defn create-compute-pipeline [device & [{:keys [module]
+                                          :as options}]]
+  ^js
+  (.createComputePipeline
+   device
+   (clj->js
+    (-> options
+        (dissoc module)
+        (update :layout
+                #(or % "auto"))
+        (update :compute
+                (fn [compute]
+                  (-> compute
+                      (default :entryPoint "compute")
+                      (default :module module)
+                      (default :targets [{:format
+                                          (preferred-canvas-format)}]))))))))
+
 (def buffer-usage-map
   {:uniform js/GPUBufferUsage.UNIFORM
    :copy-dst js/GPUBufferUsage.COPY_DST
