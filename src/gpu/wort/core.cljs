@@ -257,10 +257,30 @@
                     "\n}\n"))
              structs)))
 
-(defn wort->wgsl [{:keys [bindings structs functions]}]
+(defn core-wort->wgsl [{:keys [bindings structs functions]}]
   (str (bindings->wgsl bindings)
        "\n"
        (structs->wgsl structs)
        "\n"
        (functions->wgsl functions)
        "\n"))
+
+(defn wort->wgsl [{:keys [fragment vertex compute]
+                   :as shader}]
+  (-> shader
+      (cond-> fragment
+        (update :functions
+                assoc
+                'fragment
+                (cons 'fragment fragment)))
+      (cond-> vertex
+        (update :functions
+                assoc
+                'vertex
+                (cons 'vertex vertex)))
+      (cond-> compute
+        (update :functions
+                assoc
+                'compute
+                (cons 'compute compute)))
+      core-wort->wgsl))
