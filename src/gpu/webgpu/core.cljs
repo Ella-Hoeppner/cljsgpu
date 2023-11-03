@@ -250,6 +250,21 @@
                             & [options]]
   (render-pass command-encoder color-attachments callback 3 options))
 
+(defn simple-purefrag-render-pass [command-encoder
+                                   color-attachments
+                                   pipeline
+                                   bind-groups
+                                   & [options]]
+  (render-pass command-encoder
+               color-attachments
+               #(do (set-pass-pipeline % pipeline)
+                    (if (vector? bind-groups)
+                      (doseq [[i bind-group] (map list (range) bind-groups)]
+                        (set-pass-bind-group % i bind-group))
+                      (set-pass-bind-group % 0 bind-groups)))
+               3
+               options))
+
 (defn finish-command-encoder [encoder & [queue-or-device]]
   (let [completion (.finish encoder)]
     (if queue-or-device

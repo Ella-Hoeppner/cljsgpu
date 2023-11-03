@@ -7,10 +7,8 @@
                                      create-buffer
                                      create-bind-group
                                      pipeline-layout
-                                     set-pass-pipeline
-                                     set-pass-bind-group
-                                     purefrag-render-pass
-                                     compute-pass
+                                     simple-purefrag-render-pass
+                                     simple-compute-pass
                                      create-command-encoder
                                      finish-command-encoder
                                      write-buffer]]
@@ -99,18 +97,15 @@
                  (context-resolution context)))
 
   (let [encoder (create-command-encoder device)]
-    (compute-pass encoder
-                  #(-> %
-                       (set-pass-pipeline compute-pipeline)
-                       (set-pass-bind-group 0 (first compute-bind-groups)))
-                  [(/ grid-size workgroup-size)
-                   (/ grid-size workgroup-size)])
-    (purefrag-render-pass
-     encoder
-     context
-     #(-> %
-          (set-pass-pipeline render-pipeline)
-          (set-pass-bind-group 0 (first render-bind-groups))))
+    (simple-compute-pass encoder
+                         compute-pipeline
+                         (first compute-bind-groups)
+                         [(/ grid-size workgroup-size)
+                          (/ grid-size workgroup-size)])
+    (simple-purefrag-render-pass encoder
+                                 context
+                                 render-pipeline
+                                 (first render-bind-groups))
     (finish-command-encoder encoder device))
   (-> state
       (update :compute-bind-groups reverse)

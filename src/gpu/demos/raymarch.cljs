@@ -6,9 +6,7 @@
                                      create-buffer
                                      create-bind-group
                                      pipeline-layout
-                                     set-pass-pipeline
-                                     set-pass-bind-group
-                                     purefrag-render-pass
+                                     simple-purefrag-render-pass
                                      create-command-encoder
                                      finish-command-encoder
                                      write-buffer]]
@@ -89,11 +87,10 @@
                 time-buffer
                 (js/Float32Array. [(u/seconds-since-startup)]))
   (let [encoder (create-command-encoder device)]
-    (purefrag-render-pass encoder
-                          context
-                          #(-> %
-                               (set-pass-pipeline pipeline)
-                               (set-pass-bind-group 0 bind-group)))
+    (simple-purefrag-render-pass encoder
+                                 context
+                                 pipeline
+                                 bind-group)
     (finish-command-encoder encoder device))
   state)
 
