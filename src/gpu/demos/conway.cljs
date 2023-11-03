@@ -13,8 +13,6 @@
                                      compute-pass
                                      create-command-encoder
                                      finish-command-encoder
-                                     current-context-texture
-                                     tex-view
                                      write-buffer]]
             [gpu.dom.canvas :refer [maximize-canvas
                                     context-resolution]]
@@ -110,7 +108,7 @@
                    (/ grid-size workgroup-size)])
     (purefrag-render-pass
      encoder
-     [(tex-view (current-context-texture context))]
+     context
      #(-> %
           (set-pass-pipeline render-pipeline)
           (set-pass-bind-group 0 (first render-bind-groups))))

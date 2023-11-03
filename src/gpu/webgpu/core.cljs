@@ -175,46 +175,6 @@
   (or device.defaultEncoder
       (set! device.defaultEncoder (create-command-encoder device))))
 
-(defn compute-pass [command-encoder callback workgroup-count]
-  (let [pass ^js (.beginComputePass command-encoder)]
-    (callback pass)
-    (if (number? workgroup-count)
-      (.dispatchWorkgroups pass workgroup-count)
-      (let [[x y z] (concat workgroup-count (repeat 1))]
-        (.dispatchWorkgroups pass x y z)))
-    (.end pass)))
-
-(defn render-pass [command-encoder color-attachements callback vertices
-                   & [options]]
-  (let [pass
-        ^js (.beginRenderPass command-encoder
-                              (clj->js
-                               (assoc options
-                                      :colorAttachments
-                                      (mapv #(-> (if (= (type %)
-                                                        js/GPUTextureView)
-                                                   {:view %}
-                                                   %)
-                                                 (default :loadOp :clear)
-                                                 (default :storeOp :store))
-                                            color-attachements))))]
-    (callback pass)
-    (.draw pass vertices)
-    (.end pass)))
-
-(defn purefrag-render-pass [command-encoder color-attachements callback
-                            & [options]]
-  (render-pass command-encoder color-attachements callback 3 options))
-
-(defn finish-command-encoder [encoder & [queue-or-device]]
-  (let [completion (.finish encoder)]
-    (if queue-or-device
-      (let [queue (if (= (type queue-or-device) js/GPUDevice)
-                    queue-or-device.queue
-                    queue-or-device)]
-        (.submit queue (clj->js [completion])))
-      completion)))
-
 (defn set-pass-pipeline [pass pipeline]
   ^js (.setPipeline pass pipeline)
   pass)
@@ -228,6 +188,52 @@
 
 (defn tex-view [tex & [options]]
   ^js (.createView tex (clj->js options)))
+
+(defn compute-pass [command-encoder callback workgroup-count]
+  (let [pass ^js (.beginComputePass command-encoder)]
+    (callback pass)
+    (if (number? workgroup-count)
+      (.dispatchWorkgroups pass workgroup-count)
+      (let [[x y z] (concat workgroup-count (repeat 1))]
+        (.dispatchWorkgroups pass x y z)))
+    (.end pass)))
+
+(defn render-pass [command-encoder color-attachments callback vertices
+                   & [options]]
+  (let [color-attachment-vector (mapv #(if (= (type %) js/GPUCanvasContext)
+                                         (tex-view (current-context-texture %))
+                                         %)
+                                      (if (vector? color-attachments)
+                                        color-attachments
+                                        [color-attachments]))
+        pass
+        ^js (.beginRenderPass command-encoder
+                              (clj->js
+                               (assoc options
+                                      :colorAttachments
+                                      (mapv #(-> (if (= (type %)
+                                                        js/GPUTextureView)
+                                                   {:view %}
+                                                   %)
+                                                 (default :loadOp :clear)
+                                                 (default :storeOp :store))
+                                            color-attachment-vector))))]
+    (callback pass)
+    (.draw pass vertices)
+    (.end pass)))
+
+(defn purefrag-render-pass [command-encoder color-attachments callback
+                            & [options]]
+  (render-pass command-encoder color-attachments callback 3 options))
+
+(defn finish-command-encoder [encoder & [queue-or-device]]
+  (let [completion (.finish encoder)]
+    (if queue-or-device
+      (let [queue (if (= (type queue-or-device) js/GPUDevice)
+                    queue-or-device.queue
+                    queue-or-device)]
+        (.submit queue (clj->js [completion])))
+      completion)))
 
 (defn start-sketch! [init-fn update-fn & [{:keys [device]}]]
   (let [start-from-device (fn [device]

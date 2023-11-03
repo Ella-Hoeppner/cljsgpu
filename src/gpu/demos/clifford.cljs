@@ -12,8 +12,6 @@
                                      compute-pass
                                      create-command-encoder
                                      finish-command-encoder
-                                     current-context-texture
-                                     tex-view
                                      write-buffer]]
             [gpu.dom.canvas :refer [maximize-canvas
                                     context-resolution]]
@@ -103,13 +101,14 @@
                 (js/Float32Array.
                  (context-resolution context)))
   (let [encoder (create-command-encoder device)]
+    (u/log context)
     (compute-pass encoder
                   #(-> %
                        (set-pass-pipeline compute-pipeline)
                        (set-pass-bind-group 0 (first compute-bind-groups)))
                   (mapv #(/ % workgroup-size) point-grid-size))
     (render-pass encoder
-                 [(tex-view (current-context-texture context))]
+                 context
                  #(-> %
                       (set-pass-pipeline render-pipeline)
                       (set-pass-bind-group 0 (first render-bind-groups)))

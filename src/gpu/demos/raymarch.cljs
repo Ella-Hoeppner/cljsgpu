@@ -11,8 +11,6 @@
                                      purefrag-render-pass
                                      create-command-encoder
                                      finish-command-encoder
-                                     current-context-texture
-                                     tex-view
                                      write-buffer]]
             [gpu.dom.canvas :refer [maximize-canvas
                                     context-resolution]]
@@ -92,7 +90,7 @@
                 (js/Float32Array. [(u/seconds-since-startup)]))
   (let [encoder (create-command-encoder device)]
     (purefrag-render-pass encoder
-                          [(tex-view (current-context-texture context))]
+                          context
                           #(-> %
                                (set-pass-pipeline pipeline)
                                (set-pass-bind-group 0 bind-group)))
