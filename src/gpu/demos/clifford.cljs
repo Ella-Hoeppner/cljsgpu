@@ -6,10 +6,8 @@
                                      create-buffer
                                      create-bind-group
                                      pipeline-layout
-                                     set-pass-pipeline
-                                     set-pass-bind-group
-                                     render-pass
-                                     compute-pass
+                                     simple-compute-pass
+                                     simple-render-pass
                                      create-command-encoder
                                      finish-command-encoder
                                      write-buffer]]
@@ -98,21 +96,17 @@
   (maximize-canvas context.canvas)
   (write-buffer device
                 resolution-buffer
-                (js/Float32Array.
-                 (context-resolution context)))
+                (js/Float32Array. (context-resolution context)))
   (let [encoder (create-command-encoder device)]
-    (u/log context)
-    (compute-pass encoder
-                  #(-> %
-                       (set-pass-pipeline compute-pipeline)
-                       (set-pass-bind-group 0 (first compute-bind-groups)))
-                  (mapv #(/ % workgroup-size) point-grid-size))
-    (render-pass encoder
-                 context
-                 #(-> %
-                      (set-pass-pipeline render-pipeline)
-                      (set-pass-bind-group 0 (first render-bind-groups)))
-                 (* point-count 6))
+    (simple-compute-pass encoder
+                         compute-pipeline
+                         (first compute-bind-groups)
+                         (mapv #(/ % workgroup-size) point-grid-size))
+    (simple-render-pass encoder
+                        context
+                        render-pipeline
+                        (first render-bind-groups)
+                        (* point-count 6))
     (finish-command-encoder encoder device))
   (-> state
       (update :compute-bind-groups reverse)

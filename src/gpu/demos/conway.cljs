@@ -93,7 +93,6 @@
                              compute-bind-groups]
                       :as state}]
   (maximize-canvas context.canvas)
-
   (write-buffer device
                 resolution-buffer
                 (js/Float32Array.

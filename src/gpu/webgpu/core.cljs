@@ -198,6 +198,15 @@
         (.dispatchWorkgroups pass x y z)))
     (.end pass)))
 
+(defn simple-compute-pass [command-encoder pipeline bind-groups workgroup-count]
+  (compute-pass command-encoder
+                #(do (set-pass-pipeline % pipeline)
+                     (if (vector? bind-groups)
+                       (doseq [[i bind-group] (map list (range) bind-groups)]
+                         (set-pass-bind-group % i bind-group))
+                       (set-pass-bind-group % 0 bind-groups)))
+                workgroup-count))
+
 (defn render-pass [command-encoder color-attachments callback vertices
                    & [options]]
   (let [color-attachment-vector (mapv #(if (= (type %) js/GPUCanvasContext)
@@ -221,6 +230,21 @@
     (callback pass)
     (.draw pass vertices)
     (.end pass)))
+
+(defn simple-render-pass [command-encoder 
+                          color-attachments 
+                          pipeline 
+                          bind-groups 
+                          vertices 
+                          & [options]]
+  (render-pass command-encoder 
+               color-attachments
+               #(do (set-pass-pipeline % pipeline)
+                    (if (vector? bind-groups)
+                      (doseq [[i bind-group] (map list (range) bind-groups)]
+                        (set-pass-bind-group % i bind-group))
+                      (set-pass-bind-group % 0 bind-groups)))
+               vertices options))
 
 (defn purefrag-render-pass [command-encoder color-attachments callback
                             & [options]]
