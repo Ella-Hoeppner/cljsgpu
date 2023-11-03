@@ -3,9 +3,7 @@
 
 (def purefrag-vert-shader-wgsl
   (wort->wgsl
-   '{:functions
-     {vertex (vertex
-              [vertex-index {:type u32
+   '{:vertex ([vertex-index {:type u32
                              :builtin vertex-index}]
               {:builtin position
                :type vec4f}
@@ -14,7 +12,7 @@
                              (vec2f -1 3))
                       vertex-index]
                      0
-                     1))}}))
+                     1))}))
 
 (defn purefrag-shader [shader]
   (str purefrag-vert-shader-wgsl shader))
