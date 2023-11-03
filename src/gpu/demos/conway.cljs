@@ -96,17 +96,15 @@
                 (js/Float32Array.
                  (context-resolution context)))
 
-  (let [encoder (create-command-encoder device)]
-    (simple-compute-pass encoder
-                         compute-pipeline
-                         (first compute-bind-groups)
-                         [(/ grid-size workgroup-size)
-                          (/ grid-size workgroup-size)])
-    (simple-purefrag-render-pass encoder
-                                 context
-                                 render-pipeline
-                                 (first render-bind-groups))
-    (finish-command-encoder encoder device))
+  (-> (create-command-encoder device)
+      (simple-compute-pass compute-pipeline
+                           (first compute-bind-groups)
+                           [(/ grid-size workgroup-size)
+                            (/ grid-size workgroup-size)])
+      (simple-purefrag-render-pass context
+                                   render-pipeline
+                                   (first render-bind-groups))
+      (finish-command-encoder device))
   (-> state
       (update :compute-bind-groups reverse)
       (update :render-bind-groups reverse)))
@@ -119,12 +117,16 @@
         resolution-buffer (create-buffer device
                                          #{:uniform :copy-dst}
                                          {:size 8})
-        initial-cells (js/Uint32Array.
-                       (repeatedly (* grid-size grid-size)
-                                   #(if (> (rand) 0.5) 1 0)))
-        grid-buffers (u/gen 2 (create-buffer device
-                                             #{:storage :copy-dst}
-                                             {:size initial-cells.byteLength}))
+        grid-buffers (u/gen 2
+                            (create-buffer device
+                                           #{:storage :copy-dst}
+                                           {:data
+                                            (js/Uint32Array.
+                                             (repeatedly (* grid-size
+                                                            grid-size)
+                                                         #(if (> (rand) 0.5)
+                                                            1
+                                                            0)))}))
 
         render-bind-groups (map #(create-bind-group device
                                                     (pipeline-layout
@@ -137,9 +139,6 @@
                                    (pipeline-layout compute-pipeline)
                                    (vec %))
                                  [grid-buffers (reverse grid-buffers)])]
-    (write-buffer device
-                  (first grid-buffers)
-                  initial-cells)
     {:render-pipeline render-pipeline
      :compute-pipeline compute-pipeline
      :resolution-buffer resolution-buffer

@@ -86,12 +86,11 @@
   (write-buffer device
                 time-buffer
                 (js/Float32Array. [(u/seconds-since-startup)]))
-  (let [encoder (create-command-encoder device)]
-    (simple-purefrag-render-pass encoder
-                                 context
-                                 pipeline
-                                 bind-group)
-    (finish-command-encoder encoder device))
+  (-> (create-command-encoder device)
+      (simple-purefrag-render-pass context
+                                   pipeline
+                                   bind-group)
+      (finish-command-encoder device))
   state)
 
 (defn init-sketch [device context]

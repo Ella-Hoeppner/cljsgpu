@@ -97,17 +97,15 @@
   (write-buffer device
                 resolution-buffer
                 (js/Float32Array. (context-resolution context)))
-  (let [encoder (create-command-encoder device)]
-    (simple-compute-pass encoder
-                         compute-pipeline
-                         (first compute-bind-groups)
-                         (mapv #(/ % workgroup-size) point-grid-size))
-    (simple-render-pass encoder
-                        context
-                        render-pipeline
-                        (first render-bind-groups)
-                        (* point-count 6))
-    (finish-command-encoder encoder device))
+  (-> (create-command-encoder device)
+      (simple-compute-pass compute-pipeline
+                           (first compute-bind-groups)
+                           (mapv #(/ % workgroup-size) point-grid-size))
+      (simple-render-pass context
+                          render-pipeline
+                          (first render-bind-groups)
+                          (* point-count 6))
+      (finish-command-encoder device))
   (-> state
       (update :compute-bind-groups reverse)
       (update :render-bind-groups reverse)))
@@ -120,12 +118,12 @@
         resolution-buffer (create-buffer device
                                          #{:uniform :copy-dst}
                                          {:size 8})
-        initial-cells (js/Float32Array.
-                       (repeatedly (* 2 point-count)
-                                   rand))
         point-buffers (u/gen 2 (create-buffer device
                                               #{:storage :copy-dst}
-                                              {:size initial-cells.byteLength}))
+                                              {:data
+                                               (js/Float32Array.
+                                                (repeatedly (* 2 point-count)
+                                                            rand))}))
 
         render-bind-groups (map #(create-bind-group device
                                                     (pipeline-layout
@@ -138,9 +136,6 @@
                                    (pipeline-layout compute-pipeline)
                                    (vec %))
                                  [point-buffers (reverse point-buffers)])]
-    (write-buffer device
-                  (first point-buffers)
-                  initial-cells)
     {:render-pipeline render-pipeline
      :compute-pipeline compute-pipeline
      :resolution-buffer resolution-buffer

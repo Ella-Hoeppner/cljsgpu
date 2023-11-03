@@ -151,9 +151,6 @@
       (write-buffer device buffer data))
     buffer))
 
-(defn create-command-encoder [device & [label]]
-  ^js (.createCommandEncoder device (clj->js {:label label})))
-
 (defn create-bind-group [device layout resources & [label]]
   ^js (.createBindGroup
        device
@@ -170,10 +167,6 @@
 
 (defn pipeline-layout [pipeline & [index]]
   ^js (.getBindGroupLayout pipeline (or index 0)))
-
-(defn device-default-encoder [device]
-  (or device.defaultEncoder
-      (set! device.defaultEncoder (create-command-encoder device))))
 
 (defn set-pass-pipeline [pass pipeline]
   ^js (.setPipeline pass pipeline)
@@ -196,7 +189,8 @@
       (.dispatchWorkgroups pass workgroup-count)
       (let [[x y z] (concat workgroup-count (repeat 1))]
         (.dispatchWorkgroups pass x y z)))
-    (.end pass)))
+    (.end pass))
+  command-encoder)
 
 (defn simple-compute-pass [command-encoder pipeline bind-groups workgroup-count]
   (compute-pass command-encoder
@@ -229,7 +223,8 @@
                                             color-attachment-vector))))]
     (callback pass)
     (.draw pass vertices)
-    (.end pass)))
+    (.end pass))
+    command-encoder)
 
 (defn simple-render-pass [command-encoder 
                           color-attachments 
@@ -264,6 +259,9 @@
                       (set-pass-bind-group % 0 bind-groups)))
                3
                options))
+
+(defn create-command-encoder [device & [label]]
+  ^js (.createCommandEncoder device (clj->js {:label label})))
 
 (defn finish-command-encoder [encoder & [queue-or-device]]
   (let [completion (.finish encoder)]
