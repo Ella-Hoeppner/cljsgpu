@@ -5,8 +5,7 @@
                                      create-render-pipeline
                                      create-compute-pipeline
                                      create-buffer
-                                     create-bind-group
-                                     pipeline-layout
+                                     auto-bind-group
                                      simple-purefrag-render-pass
                                      simple-compute-pass
                                      create-command-encoder
@@ -85,65 +84,50 @@
 (defn update-sketch [device
                      context
                      {:keys [resolution-buffer
+                             grid-buffers
                              render-pipeline
-                             render-bind-groups
-                             compute-pipeline
-                             compute-bind-groups]
+                             compute-pipeline]
                       :as state}]
   (maximize-canvas context.canvas)
   (write-buffer device
                 resolution-buffer
-                (js/Float32Array.
-                 (context-resolution context)))
+                (js/Float32Array. (context-resolution context)))
 
   (-> (create-command-encoder device)
       (simple-compute-pass compute-pipeline
-                           (first compute-bind-groups)
+                           (auto-bind-group device
+                                            compute-pipeline
+                                            (vec grid-buffers))
                            [(/ grid-size workgroup-size)
                             (/ grid-size workgroup-size)])
       (simple-purefrag-render-pass context
                                    render-pipeline
-                                   (first render-bind-groups))
+                                   (auto-bind-group device
+                                                    render-pipeline
+                                                    [resolution-buffer
+                                                     (first grid-buffers)]))
       (finish-command-encoder device))
   (-> state
-      (update :compute-bind-groups reverse)
-      (update :render-bind-groups reverse)))
+      (update :grid-buffers reverse)))
 
 (defn init-sketch [device context]
-  (let [render-pipeline (create-render-pipeline device
-                                                {:shader render-shader-wgsl})
-        compute-pipeline (create-compute-pipeline device
-                                                  {:shader compute-shader-wgsl})
-        resolution-buffer (create-buffer device
-                                         #{:uniform :copy-dst}
-                                         {:size 8})
-        grid-buffers (u/gen 2
-                            (create-buffer device
-                                           #{:storage :copy-dst}
-                                           {:data
-                                            (js/Uint32Array.
-                                             (repeatedly (* grid-size
-                                                            grid-size)
-                                                         #(if (> (rand) 0.5)
-                                                            1
-                                                            0)))}))
-
-        render-bind-groups (map #(create-bind-group device
-                                                    (pipeline-layout
-                                                     render-pipeline)
-                                                    [resolution-buffer
-                                                     %])
-                                grid-buffers)
-        compute-bind-groups (map #(create-bind-group
-                                   device
-                                   (pipeline-layout compute-pipeline)
-                                   (vec %))
-                                 [grid-buffers (reverse grid-buffers)])]
-    {:render-pipeline render-pipeline
-     :compute-pipeline compute-pipeline
-     :resolution-buffer resolution-buffer
-     :render-bind-groups render-bind-groups
-     :compute-bind-groups compute-bind-groups}))
+  {:render-pipeline (create-render-pipeline device
+                                            {:shader render-shader-wgsl})
+   :compute-pipeline (create-compute-pipeline device
+                                              {:shader compute-shader-wgsl})
+   :resolution-buffer (create-buffer device
+                                     #{:uniform :copy-dst}
+                                     {:size 8})
+   :grid-buffers (u/gen 2
+                        (create-buffer device
+                                       #{:storage :copy-dst}
+                                       {:data
+                                        (js/Uint32Array.
+                                         (repeatedly (* grid-size
+                                                        grid-size)
+                                                     #(if (> (rand) 0.5)
+                                                        1
+                                                        0)))}))})
 
 (defn init []
   (start-monocanvas-sketch! init-sketch update-sketch))

@@ -4,8 +4,7 @@
                                      purefrag-shader
                                      create-render-pipeline
                                      create-buffer
-                                     create-bind-group
-                                     pipeline-layout
+                                     auto-bind-group
                                      simple-purefrag-render-pass
                                      create-command-encoder
                                      finish-command-encoder
@@ -75,8 +74,7 @@
                      context
                      {:keys [resolution-buffer
                              time-buffer
-                             pipeline
-                             bind-group]
+                             pipeline]
                       :as state}]
   (maximize-canvas context.canvas)
   (write-buffer device
@@ -89,26 +87,21 @@
   (-> (create-command-encoder device)
       (simple-purefrag-render-pass context
                                    pipeline
-                                   bind-group)
+                                   (auto-bind-group device
+                                                    pipeline
+                                                    [resolution-buffer
+                                                     time-buffer]))
       (finish-command-encoder device))
   state)
 
 (defn init-sketch [device context]
-  (let [pipeline (create-render-pipeline device {:shader render-shader})
-        resolution-buffer (create-buffer device
-                                         #{:uniform :copy-dst}
-                                         {:size 8})
-        time-buffer (create-buffer device
-                                   #{:uniform :copy-dst}
-                                   {:size 4})
-        bind-group (create-bind-group device
-                                      (pipeline-layout pipeline)
-                                      [resolution-buffer
-                                       time-buffer])]
-    {:pipeline pipeline
-     :resolution-buffer resolution-buffer
-     :time-buffer time-buffer
-     :bind-group bind-group}))
+  {:pipeline (create-render-pipeline device {:shader render-shader})
+   :resolution-buffer (create-buffer device
+                                     #{:uniform :copy-dst}
+                                     {:size 8})
+   :time-buffer (create-buffer device
+                               #{:uniform :copy-dst}
+                               {:size 4})})
 
 (defn init []
   (start-monocanvas-sketch! init-sketch update-sketch))

@@ -4,8 +4,7 @@
                                      create-render-pipeline
                                      create-compute-pipeline
                                      create-buffer
-                                     create-bind-group
-                                     pipeline-layout
+                                     auto-bind-group
                                      simple-compute-pass
                                      simple-render-pass
                                      create-command-encoder
@@ -89,9 +88,8 @@
                      context
                      {:keys [resolution-buffer
                              render-pipeline
-                             render-bind-groups
                              compute-pipeline
-                             compute-bind-groups]
+                             point-buffers]
                       :as state}]
   (maximize-canvas context.canvas)
   (write-buffer device
@@ -99,48 +97,35 @@
                 (js/Float32Array. (context-resolution context)))
   (-> (create-command-encoder device)
       (simple-compute-pass compute-pipeline
-                           (first compute-bind-groups)
+                           (auto-bind-group device
+                                            compute-pipeline
+                                            (vec point-buffers))
                            (mapv #(/ % workgroup-size) point-grid-size))
       (simple-render-pass context
                           render-pipeline
-                          (first render-bind-groups)
+                          (auto-bind-group device
+                                           render-pipeline
+                                           [resolution-buffer
+                                            (first point-buffers)])
                           (* point-count 6))
       (finish-command-encoder device))
   (-> state
-      (update :compute-bind-groups reverse)
-      (update :render-bind-groups reverse)))
+      (update :point-buffers reverse)))
 
 (defn init-sketch [device context]
-  (let [render-pipeline (create-render-pipeline device
-                                                {:shader render-shader-wgsl})
-        compute-pipeline (create-compute-pipeline device
-                                                  {:shader compute-shader-wgsl})
-        resolution-buffer (create-buffer device
-                                         #{:uniform :copy-dst}
-                                         {:size 8})
-        point-buffers (u/gen 2 (create-buffer device
-                                              #{:storage :copy-dst}
-                                              {:data
-                                               (js/Float32Array.
-                                                (repeatedly (* 2 point-count)
-                                                            rand))}))
-
-        render-bind-groups (map #(create-bind-group device
-                                                    (pipeline-layout
-                                                     render-pipeline)
-                                                    [resolution-buffer
-                                                     %])
-                                point-buffers)
-        compute-bind-groups (map #(create-bind-group
-                                   device
-                                   (pipeline-layout compute-pipeline)
-                                   (vec %))
-                                 [point-buffers (reverse point-buffers)])]
-    {:render-pipeline render-pipeline
-     :compute-pipeline compute-pipeline
-     :resolution-buffer resolution-buffer
-     :render-bind-groups render-bind-groups
-     :compute-bind-groups compute-bind-groups}))
+  {:render-pipeline (create-render-pipeline device
+                                            {:shader render-shader-wgsl})
+   :compute-pipeline (create-compute-pipeline device
+                                              {:shader compute-shader-wgsl})
+   :resolution-buffer (create-buffer device
+                                     #{:uniform :copy-dst}
+                                     {:size 8})
+   :point-buffers (u/gen 2 (create-buffer device
+                                          #{:storage :copy-dst}
+                                          {:data
+                                           (js/Float32Array.
+                                            (repeatedly (* 2 point-count)
+                                                        rand))}))})
 
 (defn init []
   (start-monocanvas-sketch! init-sketch update-sketch))

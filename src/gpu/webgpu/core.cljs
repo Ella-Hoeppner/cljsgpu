@@ -1,5 +1,6 @@
 (ns gpu.webgpu.core
-  (:require [gpu.wort.core :refer [wort->wgsl]]))
+  (:require [gpu.util :as u]
+            [gpu.wort.core :refer [wort->wgsl]]))
 
 (def purefrag-vert-shader-wgsl
   (wort->wgsl
@@ -151,22 +152,38 @@
       (write-buffer device buffer data))
     buffer))
 
-(defn create-bind-group [device layout resources & [label]]
+(defn pipeline-layout [pipeline & [index]]
+  ^js (.getBindGroupLayout pipeline (or index 0)))
+
+(defn create-bind-group [device layout-or-pipeline resources & [label]]
   ^js (.createBindGroup
        device
        (clj->js
         {:label label
-         :layout layout
+         :layout (if (= js/GPUBindGroupLayout (type layout-or-pipeline))
+                   layout-or-pipeline
+                   (pipeline-layout layout-or-pipeline))
          :entries (mapv (fn [index resource]
                           {:binding index
-                           :resource (if (= (type resource) js/GPUBuffer)
+                           :resource (if (= (type resource)
+                                            js/GPUBuffer)
                                        {:buffer resource}
                                        resource)})
                         (range)
                         resources)})))
 
-(defn pipeline-layout [pipeline & [index]]
-  ^js (.getBindGroupLayout pipeline (or index 0)))
+(defonce auto-bind-groups-atom (atom {}))
+
+(defn auto-bind-group [device layout-or-pipeline resources & [label]]
+  (let [id [device layout-or-pipeline resources label]]
+    (or (@auto-bind-groups-atom id)
+        (let [bind-group (create-bind-group device
+                                            layout-or-pipeline
+                                            resources
+                                            label)]
+          (swap! auto-bind-groups-atom
+                 #(assoc % id bind-group))
+          bind-group))))
 
 (defn set-pass-pipeline [pass pipeline]
   ^js (.setPipeline pass pipeline)
